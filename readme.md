@@ -813,55 +813,6 @@ A: Minimal - temporary files cleaned automatically. Final PNG size depends on fr
 
 ***
 
-## Project Information
-
-### Project Structure
-
-```javascript
-video_spritesheet_processor/
-├── video_spritesheet_processor.rb    # Main script (v0.5)
-├── README.md                          # This documentation
-├── LICENSE                            # MIT License
-├── examples/                          # Example outputs
-│   ├── sprite_example.png
-│   ├── preview_example.png
-│   └── pixel_art_example.png
-└── tests/                             # Test cases
-    ├── test_video.mp4
-    └── test_suite.rb
-```
-
-### Contributing
-
-Contributions welcome! Priority areas for future development:
-
-**Feature Requests:**
-
-- [ ] Additional image formats (GIF output, WebP, JPEG)
-- [ ] GUI wrapper (Tk or web-based)
-- [ ] Docker containerization for portability
-- [ ] Additional background removal algorithms (AI-based)
-- [ ] Batch processing UI with progress bars
-- [ ] JSON/YAML configuration file support
-- [ ] Real-time progress indicators for long operations
-- [ ] Sprite metadata output (JSON with frame positions)
-- [ ] Video preview before processing
-- [ ] Undo/redo for processing chains
-
-**Code Quality:**
-
-- [ ] Unit tests for all methods
-- [ ] Integration tests with sample videos
-- [ ] Performance benchmarks
-- [ ] Code coverage reporting
-- [ ] CI/CD pipeline setup
-
-**Documentation:**
-
-- [ ] Video tutorials
-- [ ] More visual examples
-- [ ] API documentation
-- [ ] Troubleshooting flowcharts
 
 ### License
 
