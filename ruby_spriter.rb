@@ -5,14 +5,21 @@
 # MP4 to Spritesheet + GIMP Image Processing Script (Ruby)
 # ==============================================================================
 # 
-# Version 0.5
+# Version 0.6
+# Developed with assistance from Claude (Anthropic AI)
+# https://github.com/scooter-indie/ruby-spriter.git
 #
 # Cross-Platform: Works on Windows and Linux
 # Configure GIMP_PATH below for your system
 #
-# This script combines two powerful workflows:
+# Cross-Platform: Works on Windows and Linux
+# Configure GIMP_PATH below for your system
+#
+# This script combines powerful workflows:
 # 1. Extract frames from MP4 and create spritesheets using ffmpeg
 # 2. Process images with GIMP (scale, remove background)
+# 3. Consolidate multiple spritesheets vertically for Godot
+# 4. Embed and read metadata for accurate grid detection (NEW in 0.6)
 #
 # Requirements:
 #   Windows: choco install ffmpeg, GIMP 3.x
@@ -26,60 +33,59 @@
 #
 # WINDOWS:
 #   GIMP_PATH = 'C:\\Program Files\\GIMP 3\\bin\\gimp-console-3.0.exe'
-#   PATH_SEPARATOR = '\\'
 #
 # LINUX:
 #   GIMP_PATH = '/usr/bin/gimp'
-#   PATH_SEPARATOR = '/'
 #
 # MACOS:
 #   GIMP_PATH = '/Applications/GIMP.app/Contents/MacOS/gimp'
-#   PATH_SEPARATOR = '/'
 #
 # ==============================================================================
 # USAGE EXAMPLES
 # ==============================================================================
 #
 # Basic Usage:
-#   ruby video_spritesheet_processor.rb --video input.mp4
-#   ruby video_spritesheet_processor.rb --image input.png --remove-bg
+#   ruby ruby_spriter.rb --video input.mp4
+#   ruby ruby_spriter.rb --image input.png --remove-bg
 #
 # Video to Spritesheet:
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --output sprite.png
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --frames 20 --columns 5
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --width 480
+#   ruby ruby_spriter.rb --video myvideo.mp4
+#   ruby ruby_spriter.rb --video myvideo.mp4 --output sprite.png
+#   ruby ruby_spriter.rb --video myvideo.mp4 --frames 20 --columns 5
+#   ruby ruby_spriter.rb --video myvideo.mp4 --width 480
 #
 # Background Removal (Fuzzy Select - Recommended):
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --fuzzy
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --fuzzy --grow 0
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --fuzzy --grow -1
-#   ruby video_spritesheet_processor.rb --image sprite.png --remove-bg --fuzzy --grow 0
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --fuzzy
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --fuzzy --grow 0
+#   ruby ruby_spriter.rb --image sprite.png --remove-bg --fuzzy --grow 0
 #
 # Background Removal (Global Color Select):
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --no-fuzzy
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --no-fuzzy --grow 2
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --no-fuzzy
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --no-fuzzy --grow 2
 #
 # Scaling:
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --scale 50
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --scale 75
-#   ruby video_spritesheet_processor.rb --image sprite.png --scale 50
+#   ruby ruby_spriter.rb --video myvideo.mp4 --scale 50
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --scale 75
+#   ruby ruby_spriter.rb --image sprite.png --scale 50
 #
 # Combined Operations:
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --scale 50
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --scale 50 --order bg_first
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --fuzzy --grow 0 --threshold 1
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --scale 50
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --scale 50 --order bg_first
+#
+# Consolidate Multiple Spritesheets (NEW in v0.6):
+#   ruby ruby_spriter.rb --consolidate sprite1.png,sprite2.png,sprite3.png
+#   ruby ruby_spriter.rb --consolidate sprite1.png,sprite2.png --output master.png
+#
+# Verify Spritesheet Metadata (NEW in v0.6):
+#   ruby ruby_spriter.rb --verify spritesheet.png
 #
 # Presets:
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --preset thumbnail
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --preset preview --remove-bg
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --preset detailed --remove-bg --fuzzy
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --preset contact
+#   ruby ruby_spriter.rb --video myvideo.mp4 --preset thumbnail
+#   ruby ruby_spriter.rb --video myvideo.mp4 --preset preview --remove-bg
 #
 # Debug Mode:
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --debug
-#   ruby video_spritesheet_processor.rb --video myvideo.mp4 --remove-bg --debug --keep-temp
+#   ruby ruby_spriter.rb --video myvideo.mp4 --remove-bg --debug
 #
 # ==============================================================================
 # COMMAND LINE OPTIONS
@@ -88,6 +94,8 @@
 # INPUT OPTIONS:
 #   -v, --video FILE              Input video file (MP4)
 #   -i, --image FILE              Input image file (PNG) for direct processing
+#       --consolidate FILES       Consolidate multiple spritesheets (comma-separated)
+#       --verify FILE             Verify spritesheet metadata
 #
 # SPRITESHEET OPTIONS:
 #   -o, --output FILE             Output file path
@@ -100,21 +108,18 @@
 #   -s, --scale PERCENT           Scale image by percentage (e.g., 50, 75, 200)
 #   -r, --remove-bg               Remove background from spritesheet using GIMP
 #   -t, --threshold VALUE         Feather radius for smooth edges (default: 0.0)
-#                                 0 = sharp edges, 1-5 = slight smoothing
 #   -g, --grow PIXELS             Pixels to grow/shrink selection (default: 1)
-#                                 Positive = expand into image
-#                                 0 = no growth
-#                                 Negative = shrink away from edges
 #
 # BACKGROUND REMOVAL METHOD:
 #       --fuzzy                   Use fuzzy select (contiguous regions only) - DEFAULT
-#                                 Only selects connected background, won't affect sprite interior
 #       --no-fuzzy                Use global color select (all matching pixels)
-#                                 Selects all pixels matching corner colors
 #
 # OPERATION ORDER:
 #       --order scale_first       Scale first, then remove background (default)
 #       --order bg_first          Remove background first, then scale
+#
+# CONSOLIDATION OPTIONS:
+#       --validate-columns        Abort if column counts don't match (default: true)
 #
 # PRESET CONFIGURATIONS:
 #       --preset thumbnail        3x3 grid, 9 frames, 240px wide
@@ -126,22 +131,6 @@
 #       --keep-temp               Keep temporary files for debugging
 #       --debug                   Enable debug mode (verbose output + keep temp files)
 #   -h, --help                    Show help message
-#
-# ==============================================================================
-# RECOMMENDED SETTINGS FOR CLEAN SPRITES
-# ==============================================================================
-#
-# For sprites with similar colors in background and sprite interior:
-#   ruby video_spritesheet_processor.rb --video input.mp4 --remove-bg --fuzzy --grow 0
-#
-# For sprites with distinct colors from background:
-#   ruby video_spritesheet_processor.rb --video input.mp4 --remove-bg --no-fuzzy --grow 1
-#
-# For pixel-perfect edges (no smoothing):
-#   ruby video_spritesheet_processor.rb --video input.mp4 --remove-bg --fuzzy --grow 0 --threshold 0
-#
-# For slightly softened edges:
-#   ruby video_spritesheet_processor.rb --video input.mp4 --remove-bg --fuzzy --grow 0 --threshold 1
 #
 # ==============================================================================
 
@@ -172,11 +161,11 @@ class VideoSpritesheetProcessor
   when :windows
     'C:\\Program Files\\GIMP 3\\bin\\gimp-console-3.0.exe'
   when :linux
-    '/usr/bin/gimp'  # or '/usr/local/bin/gimp' or check with: which gimp
+    '/usr/bin/gimp'
   when :macos
     '/Applications/GIMP.app/Contents/MacOS/gimp'
   else
-    'gimp'  # Hope it's in PATH
+    'gimp'
   end
   
   # Alternative GIMP paths to try if default doesn't exist
@@ -209,6 +198,8 @@ class VideoSpritesheetProcessor
     @options = {
       video: nil,
       image: nil,
+      consolidate: nil,
+      verify: nil,
       output: nil,
       frame_count: 16,
       columns: 4,
@@ -221,6 +212,7 @@ class VideoSpritesheetProcessor
       grow_selection: 1,
       fuzzy_select: true,
       operation_order: :scale_then_remove_bg,
+      validate_columns: true,
       temp_dir: nil,
       keep_temp: false,
       debug: false
@@ -243,6 +235,14 @@ class VideoSpritesheetProcessor
       
       opts.on("-i", "--image FILE", "Input image file (PNG) for direct processing") do |i|
         @options[:image] = i
+      end
+      
+      opts.on("--consolidate FILES", "Consolidate multiple spritesheets (comma-separated)") do |c|
+        @options[:consolidate] = c.split(',').map(&:strip)
+      end
+      
+      opts.on("--verify FILE", "Verify spritesheet metadata") do |v|
+        @options[:verify] = v
       end
       
       opts.separator ""
@@ -302,6 +302,12 @@ class VideoSpritesheetProcessor
       end
       
       opts.separator ""
+      opts.separator "Consolidation Options:"
+      opts.on("--[no-]validate-columns", "Validate column counts match (default: true)") do |v|
+        @options[:validate_columns] = v
+      end
+      
+      opts.separator ""
       opts.separator "Preset Configurations:"
       opts.on("--preset NAME", [:thumbnail, :preview, :detailed, :contact],
               "Use preset: thumbnail, preview, detailed, contact") do |preset|
@@ -342,12 +348,18 @@ class VideoSpritesheetProcessor
   end
   
   def validate_options
-    if @options[:video].nil? && @options[:image].nil?
-      abort "ERROR: Must specify either --video or --image input file"
-    end
+    # Check for verify mode (standalone)
+    return if @options[:verify]
     
-    if @options[:video] && @options[:image]
-      abort "ERROR: Cannot specify both --video and --image"
+    # Check for mutually exclusive input options
+    input_count = [@options[:video], @options[:image], @options[:consolidate]].compact.length
+    
+    if input_count == 0
+      abort "ERROR: Must specify --video, --image, --consolidate, or --verify"
+    end
+
+    if input_count > 1
+      abort "ERROR: Cannot use --video, --image, and --consolidate together. Choose one."
     end
     
     if @options[:video] && !File.exist?(@options[:video])
@@ -357,33 +369,66 @@ class VideoSpritesheetProcessor
     if @options[:image] && !File.exist?(@options[:image])
       abort "ERROR: Image file not found: #{@options[:image]}"
     end
+    
+    # Validate consolidate files
+    if @options[:consolidate]
+      if @options[:consolidate].length < 2
+        abort "ERROR: --consolidate requires at least 2 files"
+      end
+
+      @options[:consolidate].each do |file|
+        unless File.exist?(file)
+          abort "ERROR: Consolidate file not found: #{file}"
+        end
+      end
+    end
   end
   
   def run
+    # Handle verify mode
+    if @options[:verify]
+      verify_spritesheet_metadata(@options[:verify])
+      return
+    end
+    
     puts "\n" + "=" * 60
-    puts "Video Spritesheet + GIMP Processor"
+    puts "Ruby Spriter (Version 0.6)"
     puts "Platform: #{PLATFORM.to_s.capitalize}"
     puts "=" * 60 + "\n"
     
     check_dependencies
     
-    working_file = if @options[:video]
-      process_video_to_spritesheet
+    if @options[:consolidate]
+      # Consolidation mode
+      consolidate_spritesheets(@options[:consolidate])
+    elsif @options[:image]
+      # Direct image processing
+      working_file = @options[:image]
+      
+      if @options[:scale_percent] || @options[:remove_bg]
+        working_file = process_with_gimp(working_file)
+      end
+      
+      if @options[:output] && working_file != @options[:output]
+        FileUtils.cp(working_file, @options[:output])
+        puts "\n✅ Final output: #{@options[:output]}"
+      else
+        puts "\n✅ Processing complete: #{working_file}"
+      end
     else
-      @options[:image]
-    end
-    
-    # Apply GIMP processing if requested
-    if @options[:scale_percent] || @options[:remove_bg]
-      working_file = process_with_gimp(working_file)
-    end
-    
-    # Final output
-    if @options[:output] && working_file != @options[:output]
-      FileUtils.cp(working_file, @options[:output])
-      puts "\n✅ Final output: #{@options[:output]}"
-    else
-      puts "\n✅ Processing complete: #{working_file}"
+      # Video to spritesheet
+      working_file = process_video_to_spritesheet
+      
+      if @options[:scale_percent] || @options[:remove_bg]
+        working_file = process_with_gimp(working_file)
+      end
+      
+      if @options[:output] && working_file != @options[:output]
+        FileUtils.cp(working_file, @options[:output])
+        puts "\n✅ Final output: #{@options[:output]}"
+      else
+        puts "\n✅ Processing complete: #{working_file}"
+      end
     end
     
     cleanup unless @options[:keep_temp]
@@ -394,6 +439,428 @@ class VideoSpritesheetProcessor
   end
   
   private
+  
+  # ===========================================================================
+  # NEW: Metadata Management (v0.6)
+  # ===========================================================================
+  
+  def add_spritesheet_metadata(input_file, output_file, columns, rows, frames)
+  # Use ImageMagick to add PNG comment with metadata
+  magick_cmd = PLATFORM == :windows ? 'magick convert' : 'convert'
+  
+  # Create metadata string
+  metadata_str = "SPRITESHEET|columns=#{columns}|rows=#{rows}|frames=#{frames}|version=0.6"
+  
+  cmd = [
+    magick_cmd,
+    quote_path(input_file),
+    '-set', 'comment', quote_arg(metadata_str),
+    quote_path(output_file)
+  ]
+  
+  cmd_str = cmd.join(' ')
+  
+  if @options[:debug]
+    puts "      DEBUG: Metadata command: #{cmd_str}"
+  end
+  
+  stdout, stderr, status = Open3.capture3(cmd_str)
+  
+  unless status.success?
+    # Fallback: just copy the file
+    FileUtils.cp(input_file, output_file) if input_file != output_file
+    puts "      ⚠️  Warning: Could not write metadata" if @options[:debug]
+  end
+end
+
+def read_spritesheet_metadata(file)
+  metadata = { columns: nil, rows: nil, frames: nil }
+  
+  # Use ImageMagick identify to read PNG comment
+  identify_cmd = PLATFORM == :windows ? 'magick identify' : 'identify'
+  
+  cmd = "#{identify_cmd} -format \"%c\" #{quote_path(file)}"
+  
+  stdout, stderr, status = Open3.capture3(cmd)
+  
+  if status.success? && !stdout.empty?
+    # Parse metadata string format: SPRITESHEET|columns=8|rows=2|frames=16|version=0.6
+    if stdout =~ /SPRITESHEET/
+      stdout.scan(/columns=(\d+)/i) { metadata[:columns] = $1.to_i }
+      stdout.scan(/rows=(\d+)/i) { metadata[:rows] = $1.to_i }
+      stdout.scan(/frames=(\d+)/i) { metadata[:frames] = $1.to_i }
+    end
+  end
+  
+  metadata
+end
+
+def command_exists?(cmd)
+  if PLATFORM == :windows
+    system("where #{cmd} >nul 2>&1")
+  else
+    system("which #{cmd} >/dev/null 2>&1")
+  end
+end
+
+  
+  def verify_spritesheet_metadata(file)
+    unless File.exist?(file)
+      abort "ERROR: File not found: #{file}"
+    end
+    
+    puts "\n" + "=" * 60
+    puts "Spritesheet Metadata Verification"
+    puts "=" * 60
+    puts ""
+    puts "File: #{File.basename(file)}"
+    puts "Path: #{File.dirname(file)}"
+    
+    dimensions = get_image_dimensions(file)
+    metadata = read_spritesheet_metadata(file)
+    
+    puts ""
+    puts "Image Dimensions: #{dimensions[:width]}×#{dimensions[:height]} pixels"
+    puts "File Size: #{format_file_size(File.size(file))}"
+    puts ""
+    
+    if metadata[:columns] && metadata[:rows]
+      puts "✅ Embedded Metadata Found:"
+      puts "   Columns: #{metadata[:columns]}"
+      puts "   Rows: #{metadata[:rows]}"
+      puts "   Total Cells: #{metadata[:columns] * metadata[:rows]}"
+      puts "   Frames: #{metadata[:frames]}" if metadata[:frames]
+      puts "   Cell Size: #{dimensions[:width] / metadata[:columns]}×#{dimensions[:height] / metadata[:rows]} pixels"
+      puts ""
+      puts "🎮 Godot AnimatedSprite2D Settings:"
+      puts "   Hframes: #{metadata[:columns]}"
+      puts "   Vframes: #{metadata[:rows]}"
+    else
+      puts "❌ No Spritesheet Metadata Found"
+      puts ""
+      puts "Auto-detection results:"
+      info = analyze_spritesheet(file)
+      puts "   Detected Grid: #{info[:columns]}×#{info[:rows]}"
+      puts "   Cell Size: #{info[:cell_width]}×#{info[:cell_height]} pixels"
+      puts ""
+      puts "⚠️  Note: Auto-detection may be inaccurate. Consider recreating"
+      puts "   the spritesheet with ruby_spriter to embed proper metadata."
+    end
+    
+    puts "=" * 60 + "\n"
+  end
+  
+  # ===========================================================================
+  # Spritesheet Consolidation (v0.6)
+  # ===========================================================================
+  
+  def consolidate_spritesheets(input_files)
+    puts "🔗 Consolidating #{input_files.length} spritesheets...\n"
+    
+    # Analyze all input spritesheets
+    sheets_info = input_files.map.with_index do |file, idx|
+      puts "[#{idx + 1}/#{input_files.length}] Analyzing #{File.basename(file)}..."
+      info = analyze_spritesheet(file)
+      info[:filename] = file
+      info[:index] = idx + 1
+      info
+    end
+    
+    # Display analysis results
+    puts "\n" + "=" * 60
+    puts "Analysis Results:"
+    puts "=" * 60
+    sheets_info.each do |info|
+      metadata_indicator = info[:has_metadata] ? "📝" : "🔍"
+      puts "[#{info[:index]}] #{File.basename(info[:filename])} #{metadata_indicator}"
+      puts "    Size: #{info[:width]}×#{info[:height]} pixels"
+      puts "    Grid: #{info[:columns]}×#{info[:rows]} (#{info[:total_cells]} cells)"
+      puts "    Cell: #{info[:cell_width]}×#{info[:cell_height]} pixels"
+    end
+    puts ""
+    puts "Legend: 📝 = metadata embedded, 🔍 = auto-detected"
+    puts "=" * 60 + "\n"
+    
+    # Validate compatibility
+    validate_consolidation_compatibility(sheets_info)
+    
+    # Calculate output dimensions
+    output_width = sheets_info.first[:width]
+    output_height = sheets_info.sum { |s| s[:height] }
+    total_columns = sheets_info.first[:columns]
+    total_rows = sheets_info.sum { |s| s[:rows] }
+    total_cells = total_columns * total_rows
+    
+    puts "Output Specifications:"
+    puts "  Size: #{output_width}×#{output_height} pixels"
+    puts "  Grid: #{total_columns}×#{total_rows} (#{total_cells} cells)"
+    puts ""
+    
+    # Determine output filename
+    output_file = @options[:output] || generate_consolidation_filename(input_files)
+    
+    # Perform consolidation
+    puts "Creating consolidated spritesheet..."
+    consolidate_with_ffmpeg(input_files, output_file, total_columns, total_rows, total_cells)
+    
+    # Display results
+    file_size = File.size(output_file)
+    puts ""
+    puts "=" * 60
+    puts "✅ CONSOLIDATION COMPLETE!"
+    puts "=" * 60
+    puts ""
+    puts "Output: #{output_file}"
+    puts "Size:   #{format_file_size(file_size)}"
+    puts ""
+    puts "🎮 Godot AnimatedSprite2D Settings:"
+    puts "   Hframes: #{total_columns}"
+    puts "   Vframes: #{total_rows}"
+    puts ""
+    puts "📝 Metadata has been embedded in the consolidated spritesheet."
+    puts "   Use --verify to confirm: ruby_spriter --verify #{File.basename(output_file)}"
+    puts ""
+  end
+  
+  def analyze_spritesheet(file)
+    # Get image dimensions using ffprobe
+    dimensions = get_image_dimensions(file)
+    width = dimensions[:width]
+    height = dimensions[:height]
+    
+    # Try to read metadata first
+    metadata = read_spritesheet_metadata(file)
+    
+    if metadata[:columns] && metadata[:rows]
+      # Use metadata if available
+      columns = metadata[:columns]
+      rows = metadata[:rows]
+      cell_width = width / columns
+      cell_height = height / rows
+      total_cells = columns * rows
+      
+      if @options[:debug]
+        puts "      ✓ Using embedded metadata: #{columns}×#{rows}"
+      end
+      
+      {
+        width: width,
+        height: height,
+        columns: columns,
+        rows: rows,
+        cell_width: cell_width,
+        cell_height: cell_height,
+        total_cells: total_cells,
+        has_metadata: true
+      }
+    else
+      # Fall back to detection
+      if @options[:debug]
+        puts "      ⚠️  No metadata found, auto-detecting grid..."
+      end
+      
+      # Detect columns (use specified columns if set and not default)
+      columns = if @options[:columns] != 4  # 4 is default
+        @options[:columns]
+      else
+        detect_columns(width, height)
+      end
+      
+      # Calculate cell width
+      cell_width = width / columns
+      
+      # Try to detect rows properly
+      common_rows = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20]
+      
+      rows = nil
+      common_rows.each do |r|
+        if height % r == 0
+          test_cell_height = height / r
+          # Check if this gives reasonable cell proportions
+          aspect_ratio = cell_width.to_f / test_cell_height
+          if aspect_ratio >= 0.5 && aspect_ratio <= 2.0
+            rows = r
+            break
+          end
+        end
+      end
+      
+      # Fallback to square cells assumption
+      rows ||= (height.to_f / cell_width).round
+      rows = 1 if rows < 1
+      
+      cell_height = height / rows
+      total_cells = columns * rows
+      
+      {
+        width: width,
+        height: height,
+        columns: columns,
+        rows: rows,
+        cell_width: cell_width,
+        cell_height: cell_height,
+        total_cells: total_cells,
+        has_metadata: false
+      }
+    end
+  end
+  
+  def get_image_dimensions(file)
+    cmd = [
+      'ffprobe',
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height',
+      '-of', 'csv=s=x:p=0',
+      file
+    ]
+    
+    stdout, stderr, status = Open3.capture3(*cmd)
+    
+    unless status.success?
+      abort "ERROR: Could not read image dimensions for #{file}"
+    end
+    
+    width, height = stdout.strip.split('x').map(&:to_i)
+    
+    { width: width, height: height }
+  end
+  
+  def detect_columns(width, height)
+    # Try common column counts and pick the best match
+    common_columns = [4, 8, 5, 10, 6, 3, 12, 16, 2, 1]
+    
+    best_columns = 4
+    best_ratio_diff = Float::INFINITY
+    
+    common_columns.each do |cols|
+      next if width % cols != 0
+      
+      cell_w = width / cols
+      potential_rows = height / cell_w
+      next if height % cell_w != 0
+      
+      # Prefer square cells (ratio close to 1.0)
+      ratio = cell_w.to_f / (height / potential_rows)
+      ratio_diff = (ratio - 1.0).abs
+      
+      if ratio_diff < best_ratio_diff
+        best_ratio_diff = ratio_diff
+        best_columns = cols
+      end
+    end
+    
+    best_columns
+  end
+  
+  def validate_consolidation_compatibility(sheets_info)
+    # Check width consistency
+    widths = sheets_info.map { |s| s[:width] }.uniq
+    if widths.length > 1
+      puts "❌ ERROR: All spritesheets must have the same width!"
+      puts ""
+      sheets_info.each do |info|
+        puts "   [#{info[:index]}] #{File.basename(info[:filename])}: #{info[:width]} pixels"
+      end
+      puts ""
+      abort "Cannot consolidate spritesheets with different widths."
+    end
+    
+    # Check column consistency if validation enabled
+    if @options[:validate_columns]
+      columns = sheets_info.map { |s| s[:columns] }.uniq
+      if columns.length > 1
+        puts "❌ ERROR: All spritesheets must have the same number of columns!"
+        puts ""
+        sheets_info.each do |info|
+          puts "   [#{info[:index]}] #{File.basename(info[:filename])}: #{info[:columns]} columns"
+        end
+        puts ""
+        puts "💡 TIP: Use --columns to override or --no-validate-columns to skip this check"
+        abort "Cannot consolidate spritesheets with different column counts."
+      end
+    end
+    
+    # Check cell size consistency
+    cell_widths = sheets_info.map { |s| s[:cell_width] }.uniq
+    cell_heights = sheets_info.map { |s| s[:cell_height] }.uniq
+    
+    if cell_widths.length > 1 || cell_heights.length > 1
+      puts "⚠️  WARNING: Cell sizes vary between spritesheets!"
+      sheets_info.each do |info|
+        puts "   [#{info[:index]}] #{File.basename(info[:filename])}: #{info[:cell_width]}×#{info[:cell_height]} pixels per cell"
+      end
+      puts ""
+      puts "   This may cause alignment issues in Godot."
+      puts "   Press Enter to continue or CTRL+C to cancel..."
+      gets unless ENV['CI']  # Skip prompt in CI environments
+      puts ""
+    end
+    
+    puts "✅ Validation passed\n"
+  end
+  
+  def consolidate_with_ffmpeg(input_files, output_file, total_columns, total_rows, total_frames)
+    # Build ffmpeg command for vertical stacking
+    inputs = input_files.map { |f| ['-i', f] }.flatten
+    filter_inputs = (0...input_files.length).map { |i| "[#{i}:v]" }.join
+    filter_complex = "#{filter_inputs}vstack=inputs=#{input_files.length}"
+    
+    # Create temp file first for metadata addition
+    temp_output = output_file.sub('.png', '_temp.png')
+    
+    cmd = [
+      'ffmpeg',
+      *inputs,
+      '-filter_complex', filter_complex,
+      '-y',
+      temp_output
+    ]
+    
+    if @options[:debug]
+      puts "\nDEBUG: ffmpeg consolidation command:"
+      puts "  #{cmd.join(' ')}\n"
+    end
+    
+    stdout, stderr, status = Open3.capture3(*cmd)
+    
+    if @options[:debug]
+      puts stdout unless stdout.empty?
+      puts stderr unless stderr.empty?
+    end
+    
+    unless status.success?
+      puts "\nERROR: Consolidation failed"
+      puts stderr unless stderr.empty?
+      abort "ffmpeg vstack operation failed"
+    end
+    
+    unless File.exist?(temp_output)
+      abort "ERROR: Temporary output file was not created"
+    end
+    
+    # Add metadata to consolidated file
+    add_spritesheet_metadata(temp_output, output_file, total_columns, total_rows, total_frames)
+    
+    # Clean up temp file
+    File.delete(temp_output) if File.exist?(temp_output)
+    
+    unless File.exist?(output_file)
+      abort "ERROR: Output file was not created"
+    end
+    
+    puts "      ✓ Consolidated and embedded metadata: #{total_columns}×#{total_rows} grid"
+  end
+  
+  def generate_consolidation_filename(input_files)
+    dir = File.dirname(input_files.first)
+    timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+    File.join(dir, "consolidated_#{timestamp}.png")
+  end
+  
+  # ===========================================================================
+  # Existing Methods from v0.5
+  # ===========================================================================
   
   def find_gimp_executable
     # Try default path first
@@ -515,7 +982,10 @@ class VideoSpritesheetProcessor
     
     # Quote paths appropriately for platform
     video_quoted = quote_path(video)
-    output_quoted = quote_path(output_file)
+    
+    # Create temporary file first
+    temp_output = output_file.sub('.png', '_temp.png')
+    temp_quoted = quote_path(temp_output)
     
     cmd = [
       'ffmpeg',
@@ -523,7 +993,7 @@ class VideoSpritesheetProcessor
       '-filter_complex', quote_arg(filter_complex),
       '-frames:v', '1',
       '-y',
-      output_quoted,
+      temp_quoted,
       '-hide_banner',
       @options[:debug] ? '-loglevel info' : '-loglevel error'
     ].join(' ')
@@ -541,6 +1011,16 @@ class VideoSpritesheetProcessor
       abort "ffmpeg failed"
     end
     
+    unless File.exist?(temp_output)
+      abort "ERROR: Temporary output file was not created"
+    end
+    
+    # Add metadata to the PNG file
+    add_spritesheet_metadata(temp_output, output_file, columns, rows, frame_count)
+    
+    # Clean up temp file
+    File.delete(temp_output) if File.exist?(temp_output)
+    
     unless File.exist?(output_file)
       abort "ERROR: Output file was not created"
     end
@@ -548,45 +1028,83 @@ class VideoSpritesheetProcessor
     file_size = File.size(output_file)
     size_str = format_file_size(file_size)
     
-    puts "      ✅ Spritesheet created: #{output_file} (#{size_str})\n\n"
+    puts "      ✅ Spritesheet created: #{output_file} (#{size_str})"
+    puts "      📝 Metadata embedded: #{columns}×#{rows} grid (#{frame_count} frames)\n\n"
   end
   
   def process_with_gimp(input_file)
-    puts "[4/4] Processing with GIMP...\n"
-    
-    operations = []
-    operations << :scale if @options[:scale_percent]
-    operations << :remove_bg if @options[:remove_bg]
-    
-    # Determine operation order
-    if @options[:operation_order] == :remove_bg_then_scale
-      operations.reverse!
-    end
-    
-    current_file = input_file
-    
-    operations.each do |op|
-      case op
-      when :scale
-        puts "      📏 Scaling to #{@options[:scale_percent]}%..."
-        scaled_file = generate_output_filename(current_file, 'scaled')
-        python_script = generate_gimp_scale_script(current_file, scaled_file)
-        execute_gimp_script(python_script, scaled_file, "Scale")
-        current_file = scaled_file
-        
-      when :remove_bg
-        method_desc = @options[:fuzzy_select] ? "fuzzy select (contiguous)" : "global color select"
-        puts "      🎨 Removing background using #{method_desc}..."
-        puts "      Settings: feather=#{@options[:bg_threshold]}px, grow=#{@options[:grow_selection]}px"
-        nobg_file = generate_output_filename(current_file, 'nobg')
-        python_script = generate_gimp_removebg_script(current_file, nobg_file)
-        execute_gimp_script(python_script, nobg_file, "Remove Background")
-        current_file = nobg_file
-      end
-    end
-    
-    current_file
+  puts "[4/4] Processing with GIMP...\n"
+  
+  # Read metadata BEFORE processing (so we can restore it after)
+  original_metadata = read_spritesheet_metadata(input_file)
+  
+  if original_metadata[:columns] && original_metadata[:rows]
+    puts "      📝 Original metadata found: #{original_metadata[:columns]}×#{original_metadata[:rows]}"
+  else
+    puts "      ⚠️  No metadata found in source file"
   end
+  
+  operations = []
+  operations << :scale if @options[:scale_percent]
+  operations << :remove_bg if @options[:remove_bg]
+  
+  # Determine operation order
+  if @options[:operation_order] == :remove_bg_then_scale
+    operations.reverse!
+  end
+  
+  current_file = input_file
+  
+  operations.each do |op|
+    case op
+    when :scale
+      puts "      📏 Scaling to #{@options[:scale_percent]}%..."
+      scaled_file = generate_output_filename(current_file, 'scaled')
+      python_script = generate_gimp_scale_script(current_file, scaled_file)
+      execute_gimp_script(python_script, scaled_file, "Scale")
+      
+      # Restore metadata after GIMP processing
+      if original_metadata[:columns] && original_metadata[:rows]
+        temp_file = scaled_file + ".tmp"
+        FileUtils.mv(scaled_file, temp_file)
+        add_spritesheet_metadata(temp_file, scaled_file, 
+                                original_metadata[:columns], 
+                                original_metadata[:rows], 
+                                original_metadata[:frames])
+        File.delete(temp_file) if File.exist?(temp_file)
+        puts "      ✓ Metadata restored to scaled image"
+      end
+      
+      current_file = scaled_file
+      
+    when :remove_bg
+      method_desc = @options[:fuzzy_select] ? "fuzzy select (contiguous)" : "global color select"
+      puts "      🎨 Removing background using #{method_desc}..."
+      puts "      Settings: feather=#{@options[:bg_threshold]}px, grow=#{@options[:grow_selection]}px"
+      nobg_file = generate_output_filename(current_file, 'nobg')
+      python_script = generate_gimp_removebg_script(current_file, nobg_file)
+      execute_gimp_script(python_script, nobg_file, "Remove Background")
+      
+      # Restore metadata after GIMP processing
+      if original_metadata[:columns] && original_metadata[:rows]
+        temp_file = nobg_file + ".tmp"
+        FileUtils.mv(nobg_file, temp_file)
+        add_spritesheet_metadata(temp_file, nobg_file, 
+                                original_metadata[:columns], 
+                                original_metadata[:rows], 
+                                original_metadata[:frames])
+        File.delete(temp_file) if File.exist?(temp_file)
+        puts "      ✓ Metadata restored to processed image"
+      end
+      
+      current_file = nobg_file
+    end
+  end
+  
+  current_file
+end
+
+
   
   def generate_gimp_scale_script(input_file, output_file)
     input_path = normalize_path_for_python(input_file)
