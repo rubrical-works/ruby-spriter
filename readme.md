@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.1
+# Ruby Spriter v0.6.1 (Unstable)
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
