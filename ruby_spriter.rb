@@ -5,6 +5,8 @@
 # MP4 to Spritesheet + GIMP Image Processing Script (Ruby)
 # ==============================================================================
 # 
+# Version 0.5
+#
 # Cross-Platform: Works on Windows and Linux
 # Configure GIMP_PATH below for your system
 #
