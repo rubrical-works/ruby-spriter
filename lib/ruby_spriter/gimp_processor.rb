@@ -21,12 +21,23 @@ module RubySpriter
 
       Utils::OutputFormatter.header("GIMP Processing")
 
+      # Inform user if automatic operation order optimization is applied
+      if options[:scale_percent] && options[:remove_bg] &&
+         options[:operation_order] == :scale_then_remove_bg
+        Utils::OutputFormatter.note("Auto-optimized: Removing background before scaling for better quality")
+      end
+
       working_file = input_file
       operations = determine_operations
 
       # Execute operations in configured order
       operations.each do |operation|
         working_file = send(operation, working_file)
+      end
+
+      # Apply sharpening at the very end, after all GIMP operations
+      if options[:sharpen]
+        working_file = apply_sharpen_imagemagick(working_file)
       end
 
       working_file
@@ -36,11 +47,18 @@ module RubySpriter
 
     def determine_operations
       ops = []
-      
-      if options[:operation_order] == :remove_bg_then_scale
+
+      # Automatically use bg_first when both scaling and background removal are enabled
+      # This produces cleaner results because:
+      # - Background removal works better at higher resolution
+      # - Scaling smooths out any rough edges from background removal
+      auto_bg_first = options[:scale_percent] && options[:remove_bg] &&
+                      options[:operation_order] == :scale_then_remove_bg
+
+      if options[:operation_order] == :remove_bg_then_scale || auto_bg_first
         ops << :remove_background if options[:remove_bg]
         ops << :scale_image if options[:scale_percent]
-      else # :scale_then_remove_bg (default)
+      else # :scale_then_remove_bg (when only one operation, or explicitly requested)
         ops << :scale_image if options[:scale_percent]
         ops << :remove_background if options[:remove_bg]
       end
@@ -59,6 +77,8 @@ module RubySpriter
 
       # Preserve metadata from input file
       preserve_metadata(input_file, output_file)
+
+      # Note: Sharpening is applied at the end in process() method
 
       output_file
     end
@@ -81,61 +101,98 @@ module RubySpriter
     def generate_scale_script(input_file, output_file, percent)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
+      interpolation = map_interpolation_method(options[:scale_interpolation] || 'nohalo')
+
+      # Get sharpen parameters with proper defaults
+      sharpen_enabled = options[:sharpen] || false
+      sharpen_radius = options[:sharpen_radius] || 3.0
+      sharpen_amount = options[:sharpen_amount] || 0.5
+      sharpen_threshold = options[:sharpen_threshold] || 0
 
       <<~PYTHON
         import sys
         import gc
         from gi.repository import Gimp, Gio, Gegl
-        
+
         img = None
         layer = None
-        
+
         try:
             print("Loading image...")
             img = Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, Gio.File.new_for_path(r'#{input_path}'))
-            
+
             w = img.get_width()
             h = img.get_height()
             print(f"Image size: {w}x{h}")
-            
+
             layers = img.get_layers()
             if not layers or len(layers) == 0:
                 raise Exception("No layers found")
             layer = layers[0]
-            
+
             # Calculate new dimensions
             new_width = int(w * #{percent} / 100.0)
             new_height = int(h * #{percent} / 100.0)
             print(f"Scaling to: {new_width}x{new_height}")
-            
-            # Scale image
-            img.scale(new_width, new_height)
-            print("Image scaled")
-            
-            # Flatten and export
+            print(f"Interpolation: #{interpolation}")
+
+            # Set interpolation method via context
             pdb = Gimp.get_pdb()
-            flatten_proc = pdb.lookup_procedure('gimp-image-flatten')
-            if flatten_proc:
-                config = flatten_proc.create_config()
-                config.set_property('image', img)
-                flatten_proc.run(config)
-                print("Image flattened")
-            
-            # Get the merged layer
+            context_set_interp = pdb.lookup_procedure('gimp-context-set-interpolation')
+            if context_set_interp:
+                config = context_set_interp.create_config()
+                config.set_property('interpolation', #{interpolation})
+                context_set_interp.run(config)
+                print("Interpolation method set in context")
+
+            # Scale layer using the context interpolation
+            scale_proc = pdb.lookup_procedure('gimp-layer-scale')
+            if scale_proc:
+                config = scale_proc.create_config()
+                config.set_property('layer', layer)
+                config.set_property('new-width', new_width)
+                config.set_property('new-height', new_height)
+                config.set_property('local-origin', False)
+                scale_proc.run(config)
+                print("Layer scaled with interpolation")
+
+            # Resize canvas to match layer
+            img.resize(new_width, new_height, 0, 0)
+            print("Canvas resized")
+
+            # Only flatten if there are multiple layers AND no transparency is needed
+            # Otherwise, preserve the alpha channel for transparent images
             layers = img.get_layers()
-            merged = layers[0]
-            
-            # Export
-            print("Exporting...")
+            if len(layers) > 1:
+                # Merge down multiple layers while preserving alpha
+                merge_proc = pdb.lookup_procedure('gimp-image-merge-visible-layers')
+                if merge_proc:
+                    config = merge_proc.create_config()
+                    config.set_property('image', img)
+                    config.set_property('merge-type', Gimp.MergeType.EXPAND_AS_NECESSARY)
+                    merge_proc.run(config)
+                    print("Multiple layers merged (alpha preserved)")
+            else:
+                print("Single layer - no merge needed, alpha preserved")
+
+            # Get the final layer
+            layers = img.get_layers()
+            final_layer = layers[0]
+
+            # Note: Sharpening will be applied using ImageMagick after GIMP export
+            # This is because GEGL operations in GIMP 3.x batch mode are unreliable
+
+            # Export with alpha channel intact
+            print("Exporting with alpha channel...")
             export_proc = pdb.lookup_procedure('file-png-export')
             if export_proc:
                 config = export_proc.create_config()
                 config.set_property('image', img)
                 config.set_property('file', Gio.File.new_for_path(r'#{output_path}'))
                 export_proc.run(config)
-            
+
             print("SUCCESS - Image scaled!")
-        
+
         except Exception as e:
             print(f"ERROR: {e}")
             import traceback
@@ -531,12 +588,77 @@ module RubySpriter
 
     def cleanup_temp_files(script_file, log_file)
       batch_file = script_file.sub('.py', '.bat').sub('gimp_script', 'gimp_run')
-      
+
       [script_file, log_file, batch_file].each do |file|
         File.delete(file) if File.exist?(file)
       rescue StandardError => e
         puts "Warning: Could not delete temp file #{file}: #{e.message}" if options[:debug]
       end
+    end
+
+    # Map interpolation method names to GIMP interpolation type enum values
+    def map_interpolation_method(method)
+      # GIMP 3.x GimpInterpolationType enum values
+      case method.to_s.downcase
+      when 'none'
+        'Gimp.InterpolationType.NONE'
+      when 'linear'
+        'Gimp.InterpolationType.LINEAR'
+      when 'cubic'
+        'Gimp.InterpolationType.CUBIC'
+      when 'nohalo'
+        'Gimp.InterpolationType.NOHALO'
+      when 'lohalo'
+        'Gimp.InterpolationType.LOHALO'
+      else
+        'Gimp.InterpolationType.NOHALO'  # Default to NoHalo for quality
+      end
+    end
+
+    # Apply unsharp mask using ImageMagick
+    def apply_sharpen_imagemagick(input_file)
+      radius = options[:sharpen_radius] || 2.0
+      gain = options[:sharpen_gain] || 0.5
+      threshold = options[:sharpen_threshold] || 0.03
+
+      output_file = Utils::FileHelper.output_filename(input_file, "sharpened")
+
+      Utils::OutputFormatter.indent("Applying unsharp mask (ImageMagick)...")
+      Utils::OutputFormatter.indent("  radius=#{radius}, gain=#{gain}, threshold=#{threshold}")
+
+      magick_cmd = Platform.imagemagick_convert_cmd
+
+      # Build ImageMagick unsharp command
+      # Format: -unsharp {radius}x{sigma}+{gain}+{threshold}
+      # sigma is typically radius * 0.5 for good results
+      sigma = radius * 0.5
+      unsharp_params = "#{radius}x#{sigma}+#{gain}+#{threshold}"
+
+      cmd = [
+        magick_cmd,
+        Utils::PathHelper.quote_path(input_file),
+        '-unsharp', unsharp_params,
+        Utils::PathHelper.quote_path(output_file)
+      ].join(' ')
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: ImageMagick command: #{cmd}")
+      end
+
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "ImageMagick sharpen failed: #{stderr}"
+      end
+
+      Utils::FileHelper.validate_exists!(output_file)
+
+      # Preserve metadata
+      preserve_metadata(input_file, output_file)
+
+      Utils::OutputFormatter.success("Sharpening complete")
+
+      output_file
     end
   end
 end
