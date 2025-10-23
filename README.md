@@ -120,8 +120,16 @@ gem install ruby_spriter-0.6.2.gem
 ### Step 3: Verify Installation
 
 ```bash
-ruby_spriter --help
+# Check Ruby Spriter installation
+ruby_spriter --version
+
+# Check all external dependencies
+ruby_spriter --check-dependencies
 ```
+
+The `--check-dependencies` command will verify that FFmpeg, FFprobe, ImageMagick, and GIMP are properly installed and accessible. It displays:
+- ✅ Tool found with version/path information
+- ❌ Tool missing with platform-specific installation commands
 
 ---
 
@@ -241,6 +249,8 @@ ruby_spriter --consolidate file1.png,file2.png,file3.png \
 ```bash
     --keep-temp               Keep temporary files for debugging
     --debug                   Enable verbose output + keep temp files
+    --check-dependencies      Check if all required external tools are installed
+    --version                 Show version information
 -h, --help                    Show help message
 ```
 

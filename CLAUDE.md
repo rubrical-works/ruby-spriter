@@ -57,8 +57,16 @@ rspec spec/ruby_spriter/processor_spec.rb:42
 
 ### Checking Dependencies
 ```bash
+# Via rake task (development)
 rake check_deps
+
+# Via CLI flag (production/user-facing)
+ruby_spriter --check-dependencies
 ```
+
+The `--check-dependencies` flag runs `DependencyChecker.print_report` and exits with:
+- Exit code 0 if all dependencies are satisfied
+- Exit code 1 if any dependencies are missing
 
 ### Running the CLI
 ```bash
