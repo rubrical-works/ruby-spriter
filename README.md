@@ -68,6 +68,10 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - Ruby 2.7.0 or higher
 - No runtime gem dependencies (uses Ruby standard library)
 
+### Supported File Formats
+- **Video Input**: MP4 only
+- **Image Input/Output**: PNG only
+
 ---
 
 ## 🚀 Installation
@@ -185,10 +189,10 @@ ruby_spriter --consolidate file1.png,file2.png,file3.png \
 
 #### **Input Options**
 ```bash
--v, --video FILE              Input video file (MP4)
--i, --image FILE              Input image file (PNG) for direct processing
-    --consolidate FILES       Consolidate multiple spritesheets (comma-separated)
-    --verify FILE             Verify spritesheet metadata
+-v, --video FILE              Input video file (MP4 only)
+-i, --image FILE              Input image file (PNG only)
+    --consolidate FILES       Consolidate multiple spritesheets (PNG only, comma-separated)
+    --verify FILE             Verify spritesheet metadata (PNG only)
 ```
 
 #### **Spritesheet Options**

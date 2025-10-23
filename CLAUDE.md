@@ -13,10 +13,21 @@ Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from vi
 
 The tool orchestrates several external command-line tools:
 - **FFmpeg/FFprobe**: Video frame extraction and analysis
-- **ImageMagick**: Metadata management and spritesheet consolidation
-- **GIMP 3.x (or 2.10)**: Image processing (scaling, background removal)
+- **ImageMagick**: Metadata management, consolidation, and sharpening
+- **GIMP 3.x (or 2.10)**: Image processing (scaling with interpolation, background removal)
 
 All external dependencies are checked at runtime via `DependencyChecker` (lib/ruby_spriter/dependency_checker.rb).
+
+## Supported File Formats
+
+**Input:**
+- Video: MP4 only (validated at runtime)
+- Image: PNG only (validated at runtime)
+
+**Output:**
+- PNG only (with embedded metadata)
+
+File extension validation is performed in `Processor#validate_file_extension!` and will raise `ValidationError` if incorrect formats are provided.
 
 ## Development Commands
 
@@ -73,10 +84,15 @@ Ruby Spriter operates in four distinct modes, orchestrated by `Processor`:
 
 The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 
-1. **Validation**: Validate options and input files
+1. **Validation**: Validate options, input files, and file extensions
 2. **Dependency Check**: Ensure external tools are available
 3. **Workflow Execution**: Execute mode-specific processing
 4. **Cleanup**: Remove temporary files (unless `--keep-temp`)
+
+**Validation includes:**
+- File existence checks
+- File extension validation (MP4 for video, PNG for images)
+- Input mode compatibility (cannot use multiple input modes simultaneously)
 
 ### Key Components
 
@@ -87,8 +103,10 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 
 **GimpProcessor** (lib/ruby_spriter/gimp_processor.rb)
 - Generates Python-fu scripts for GIMP 3.x batch processing
-- Supports two operation orders: scale-then-remove-bg (default) or remove-bg-then-scale
-- Preserves metadata through processing pipeline
+- Supports 5 interpolation methods: none, linear, cubic, nohalo (default), lohalo
+- Automatically optimizes operation order (remove background before scale) when both operations requested
+- Applies sharpening via ImageMagick after GIMP operations (not GIMP GEGL due to batch mode limitations)
+- Preserves alpha channels and metadata through processing pipeline
 - Handles platform-specific GIMP execution (Windows uses batch files, Unix uses shell commands)
 - Filters out cosmetic GEGL warnings from GIMP 3.x
 
