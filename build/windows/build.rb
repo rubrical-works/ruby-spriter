@@ -67,6 +67,25 @@ system(cmd)
 
 if File.exist?(OUTPUT_EXE)
   size_mb = File.size(OUTPUT_EXE) / (1024.0 * 1024.0)
+
+  # OCRA executables with Ruby runtime should be at least 10 MB
+  # If smaller, the build likely failed
+  if size_mb < 10.0
+    puts ""
+    puts "======================================================"
+    puts "ERROR: Build failed - executable too small"
+    puts "======================================================"
+    puts "  Executable: #{OUTPUT_EXE}"
+    puts "  Size: #{size_mb.round(2)} MB (expected > 10 MB)"
+    puts ""
+    puts "This usually indicates OCRA failed to bundle Ruby runtime."
+    puts "Check that:"
+    puts "  - Ruby version is compatible with OCRA (try Ruby 3.2)"
+    puts "  - OCRA gem installed correctly: gem install ocra"
+    puts "======================================================"
+    exit 1
+  end
+
   puts ""
   puts "======================================================"
   puts "SUCCESS!"
@@ -84,7 +103,7 @@ if File.exist?(OUTPUT_EXE)
 else
   puts ""
   puts "======================================================"
-  puts "ERROR: Build failed"
+  puts "ERROR: Build failed - executable not created"
   puts "======================================================"
   exit 1
 end
