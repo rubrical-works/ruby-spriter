@@ -12,6 +12,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2] - 2025-10-22
+
+### ✨ Quality Enhancement & Tooling Release
+
+#### Added
+- **Interpolation Options**: 5 interpolation methods for scaling (none, linear, cubic, nohalo, lohalo)
+- **Sharpening Support**: Unsharp mask with configurable radius, gain, and threshold
+- **`--version` Flag**: Display version, platform, and date information
+- **`--check-dependencies` Flag**: Verify all external tools are installed with platform-specific guidance
+- **File Extension Validation**: Runtime validation for MP4 (video) and PNG (images)
+- **GIMP Investigation Documentation**: Comprehensive documentation of GIMP sharpen attempts and solutions
+
+#### Changed
+- **Automatic Operation Order**: Auto-optimize to remove background before scaling for better quality
+- **Sharpening via ImageMagick**: Use ImageMagick instead of GIMP for reliable cross-platform sharpening
+- **Alpha Channel Preservation**: Use merge instead of flatten to preserve transparency
+- **Conservative Sharpen Defaults**: radius: 2.0, gain: 0.5, threshold: 0.03 to minimize halo artifacts
+- **Parameter Terminology**: Changed "amount" to "gain" to match ImageMagick documentation
+
+#### Fixed
+- **Gem Build Error**: Removed .rb extension from `bin/ruby_spriter` executable
+- **Clear Error Messages**: File extension validation provides helpful feedback
+
+#### Documentation
+- **README.md**: Added interpolation and sharpening documentation, file format requirements
+- **CLAUDE.md**: Updated with new features and validation details
+- **GIMP_SHARPEN_INVESTIGATION.md**: Documents 8 failed GIMP attempts and architectural decisions
+
+---
+
 ## [0.6.1] - 2025-10-22
 
 ### 🎉 Major Refactoring Release
@@ -94,5 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.6.2]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/scooter-indie/ruby-spriter/releases/tag/v0.6.0
