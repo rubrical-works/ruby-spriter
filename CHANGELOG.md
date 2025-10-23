@@ -12,6 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.3] - 2025-10-23
+
+### 🧪 Testing & Quality Assurance Release
+
+#### Added
+- **155 New RSpec Tests**: Comprehensive test coverage for CLI, GimpProcessor, Consolidator, PathHelper
+- **Test Fixtures**: Real spritesheet fixtures (4x2, 6x2, 4x4), PNG images, MP4 video
+- **Code Coverage Reporting**: SimpleCov tracking showing 57.09% coverage
+
+#### Fixed
+- **CLI Preset Bug**: Fixed OptionParser limitation preventing all 4 presets from working
+- **PathHelper Quote Escaping**: Fixed single quote escaping in Unix paths (needed 4 backslashes)
+- **Spec Helper Bug**: Changed instance variable to global variable for cross-context access
+- **PathHelper Tests**: Made drive letter detection flexible for E: drive compatibility
+
+#### Testing
+- **CLI Tests (97)**: --help, --version, --check-dependencies, --image, --video, --consolidate, --verify
+- **GimpProcessor Tests (48)**: Initialization, operations, interpolation, output filtering, script generation
+- **Consolidator Tests (33)**: File validation, metadata, column validation, consolidation logic
+- **PathHelper Tests (7)**: Quote paths, normalize for Python, native format conversion
+- **Coverage**: Increased from 22.52% to 57.09% (+34.57 percentage points)
+
+Closes #5
+
+---
+
 ## [0.6.2] - 2025-10-22
 
 ### ✨ Quality Enhancement & Tooling Release
