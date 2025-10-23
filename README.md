@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.4
+# Ruby Spriter v0.6.5
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -134,7 +134,7 @@ bundle install
 
 # Build and install gem locally
 gem build ruby_spriter.gemspec
-gem install ruby_spriter-0.6.4.gem
+gem install ruby_spriter-0.6.5.gem
 ```
 
 **Best for**: Contributors, developers wanting latest code
