@@ -188,11 +188,18 @@ module RubySpriter
     def add_preset_options(opts, options)
       opts.separator "Preset Configurations:"
 
-      PRESETS.each do |name, config|
-        description = "#{config[:columns]}×? grid, #{config[:frame_count]} frames, #{config[:max_width]}px wide"
-        opts.on("--preset #{name}", description) do
-          options.merge!(config)
+      preset_descriptions = PRESETS.map do |name, config|
+        "    #{name}: #{config[:columns]}×? grid, #{config[:frame_count]} frames, #{config[:max_width]}px wide"
+      end.join("\n")
+
+      opts.on("--preset NAME", String, "Apply preset configuration:",
+              *preset_descriptions.split("\n")) do |preset_name|
+        preset_key = preset_name.to_sym
+        unless PRESETS.key?(preset_key)
+          valid_presets = PRESETS.keys.join(', ')
+          raise OptionParser::InvalidArgument, "Unknown preset: #{preset_name}. Valid options: #{valid_presets}"
         end
+        options.merge!(PRESETS[preset_key])
       end
 
       opts.separator ""

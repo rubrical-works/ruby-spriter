@@ -428,6 +428,406 @@ RSpec.describe RubySpriter::CLI do
     end
   end
 
+  describe '--video flag' do
+    let(:fixture_video) { File.join(__dir__, '..', 'fixtures', 'test_video.mp4') }
+
+    describe 'argument parsing' do
+      it 'sets video option with --video flag' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video])
+      end
+
+      it 'supports short form -v flag' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          processor_double
+        end
+
+        described_class.start(['-v', fixture_video])
+      end
+
+      it 'accepts file path with spaces' do
+        # Create a temp file with spaces in the name for this test
+        temp_file = File.join(@test_dir, 'video with spaces.mp4')
+        FileUtils.cp(fixture_video, temp_file)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(temp_file)
+          processor_double
+        end
+
+        described_class.start(['--video', temp_file])
+      end
+    end
+
+    describe 'mutual exclusivity with other input modes' do
+      it 'cannot be used with --image' do
+        expect do
+          described_class.start(['--video', fixture_video, '--image', 'test.png'])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'cannot be used with --consolidate' do
+        expect do
+          described_class.start(['--video', fixture_video, '--consolidate', 'a.png,b.png'])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'cannot be used with --verify' do
+        expect do
+          described_class.start(['--video', fixture_video, '--verify', 'test.png'])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'can be used alone without error' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+        allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+        expect do
+          described_class.start(['--video', fixture_video])
+        end.not_to raise_error
+      end
+    end
+
+    describe 'file validation' do
+      describe 'file existence' do
+        it 'raises error for non-existent file' do
+          expect do
+            described_class.start(['--video', 'nonexistent.mp4'])
+          end.to raise_error(RubySpriter::ValidationError, /File not found/)
+        end
+
+        it 'accepts existing MP4 file' do
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect(File.exist?(fixture_video)).to be true
+          expect do
+            described_class.start(['--video', fixture_video])
+          end.not_to raise_error
+        end
+      end
+
+      describe 'file extension validation' do
+        it 'accepts .mp4 extension' do
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect(File.extname(fixture_video)).to eq('.mp4')
+          expect do
+            described_class.start(['--video', fixture_video])
+          end.not_to raise_error
+        end
+
+        it 'accepts .MP4 extension (case insensitive)' do
+          # Create a temp file with uppercase extension
+          temp_file = File.join(@test_dir, 'test.MP4')
+          FileUtils.cp(fixture_video, temp_file)
+
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.not_to raise_error
+        end
+
+        it 'rejects .avi extension' do
+          temp_file = File.join(@test_dir, 'test.avi')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.to raise_error(RubySpriter::ValidationError, /--video expects \.mp4 file, got: \.avi/)
+        end
+
+        it 'rejects .mov extension' do
+          temp_file = File.join(@test_dir, 'test.mov')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.to raise_error(RubySpriter::ValidationError, /--video expects \.mp4 file, got: \.mov/)
+        end
+
+        it 'rejects .mkv extension' do
+          temp_file = File.join(@test_dir, 'test.mkv')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.to raise_error(RubySpriter::ValidationError, /--video expects \.mp4 file, got: \.mkv/)
+        end
+
+        it 'rejects .wmv extension' do
+          temp_file = File.join(@test_dir, 'test.wmv')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.to raise_error(RubySpriter::ValidationError, /--video expects \.mp4 file, got: \.wmv/)
+        end
+
+        it 'rejects file with no extension' do
+          temp_file = File.join(@test_dir, 'videofile')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--video', temp_file])
+          end.to raise_error(RubySpriter::ValidationError, /--video expects \.mp4 file/)
+        end
+      end
+    end
+
+    describe 'integration with video-specific options' do
+      it 'works with --frames option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:frame_count]).to eq(32)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--frames', '32'])
+      end
+
+      it 'works with --columns option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:columns]).to eq(8)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--columns', '8'])
+      end
+
+      it 'works with --width option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:max_width]).to eq(640)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--width', '640'])
+      end
+
+      it 'works with --background option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:bg_color]).to eq('white')
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--background', 'white'])
+      end
+
+      it 'works with multiple video options combined' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:frame_count]).to eq(64)
+          expect(options[:columns]).to eq(8)
+          expect(options[:max_width]).to eq(480)
+          expect(options[:bg_color]).to eq('white')
+          processor_double
+        end
+
+        described_class.start([
+          '--video', fixture_video,
+          '--frames', '64',
+          '--columns', '8',
+          '--width', '480',
+          '--background', 'white'
+        ])
+      end
+    end
+
+    describe 'integration with processing options' do
+      it 'works with --scale option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:scale_percent]).to eq(50)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--scale', '50'])
+      end
+
+      it 'works with --remove-bg option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:remove_bg]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--remove-bg'])
+      end
+
+      it 'works with --sharpen option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:sharpen]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--sharpen'])
+      end
+
+      it 'works with --interpolation option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:scale_interpolation]).to eq('lohalo')
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--interpolation', 'lohalo'])
+      end
+
+      it 'works with all options combined' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:frame_count]).to eq(32)
+          expect(options[:columns]).to eq(8)
+          expect(options[:scale_percent]).to eq(50)
+          expect(options[:remove_bg]).to eq(true)
+          expect(options[:sharpen]).to eq(true)
+          expect(options[:scale_interpolation]).to eq('nohalo')
+          processor_double
+        end
+
+        described_class.start([
+          '--video', fixture_video,
+          '--frames', '32',
+          '--columns', '8',
+          '--scale', '50',
+          '--remove-bg',
+          '--sharpen',
+          '--interpolation', 'nohalo'
+        ])
+      end
+
+      it 'works with --output option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:output]).to eq('custom_spritesheet.png')
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--output', 'custom_spritesheet.png'])
+      end
+    end
+
+    describe 'preset configurations' do
+      it 'works with --preset thumbnail' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:columns]).to eq(3)
+          expect(options[:frame_count]).to eq(9)
+          expect(options[:max_width]).to eq(240)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--preset', 'thumbnail'])
+      end
+
+      it 'works with --preset preview' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:columns]).to eq(4)
+          expect(options[:frame_count]).to eq(16)
+          expect(options[:max_width]).to eq(400)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--preset', 'preview'])
+      end
+
+      it 'works with --preset detailed' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:columns]).to eq(10)
+          expect(options[:frame_count]).to eq(50)
+          expect(options[:max_width]).to eq(320)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--preset', 'detailed'])
+      end
+
+      it 'works with --preset contact' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:columns]).to eq(8)
+          expect(options[:frame_count]).to eq(64)
+          expect(options[:max_width]).to eq(160)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--preset', 'contact'])
+      end
+    end
+  end
+
   describe 'error handling' do
     describe 'invalid option' do
       it 'displays error message for invalid option' do
