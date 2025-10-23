@@ -21,17 +21,17 @@ RSpec.configure do |config|
 
   # Helpers for creating temp files in tests
   config.before(:suite) do
-    @test_temp_dir = File.join(Dir.tmpdir, 'ruby_spriter_test')
-    FileUtils.mkdir_p(@test_temp_dir)
+    $test_temp_dir = File.join(Dir.tmpdir, 'ruby_spriter_test')
+    FileUtils.mkdir_p($test_temp_dir)
   end
 
   config.after(:suite) do
-    FileUtils.rm_rf(@test_temp_dir) if File.exist?(@test_temp_dir)
+    FileUtils.rm_rf($test_temp_dir) if $test_temp_dir && File.exist?($test_temp_dir)
   end
 
   # Make test temp directory available to all specs
   config.before(:each) do
-    @test_dir = File.join(@test_temp_dir, "test_#{Time.now.to_i}_#{rand(10000)}")
+    @test_dir = File.join($test_temp_dir, "test_#{Time.now.to_i}_#{rand(10000)}")
     FileUtils.mkdir_p(@test_dir)
   end
 
