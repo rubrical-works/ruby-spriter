@@ -110,6 +110,27 @@ module RubySpriter
         options[:scale_percent] = s
       end
 
+      opts.on("--interpolation METHOD", [:none, :linear, :cubic, :nohalo, :lohalo],
+              "Interpolation method: none, linear, cubic, nohalo, lohalo (default: nohalo)") do |i|
+        options[:scale_interpolation] = i.to_s
+      end
+
+      opts.on("--sharpen", "Apply unsharp mask after scaling (enhances edges)") do
+        options[:sharpen] = true
+      end
+
+      opts.on("--sharpen-radius VALUE", Float, "Sharpen radius in pixels (default: 2.0)") do |r|
+        options[:sharpen_radius] = r
+      end
+
+      opts.on("--sharpen-gain VALUE", Float, "Sharpen gain/strength (default: 0.5, range: 0.0-2.0+)") do |g|
+        options[:sharpen_gain] = g
+      end
+
+      opts.on("--sharpen-threshold VALUE", Float, "Sharpen threshold as fraction (default: 0.03, range: 0.0-1.0)") do |t|
+        options[:sharpen_threshold] = t
+      end
+
       opts.on("-r", "--remove-bg", "Remove background from spritesheet using GIMP") do
         options[:remove_bg] = true
       end
@@ -191,6 +212,8 @@ module RubySpriter
       opts.separator "Examples:"
       opts.separator "  ruby_spriter --video input.mp4"
       opts.separator "  ruby_spriter --video input.mp4 --remove-bg --scale 50"
+      opts.separator "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo --sharpen"
+      opts.separator "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
       opts.separator "  ruby_spriter --image sprite.png --remove-bg --fuzzy"
       opts.separator "  ruby_spriter --consolidate file1.png,file2.png,file3.png"
       opts.separator "  ruby_spriter --verify spritesheet.png"

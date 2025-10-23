@@ -41,6 +41,11 @@ module RubySpriter
         padding: 0,
         bg_color: 'black',
         scale_percent: nil,
+        scale_interpolation: 'nohalo',
+        sharpen: false,
+        sharpen_radius: 2.0,
+        sharpen_gain: 0.5,
+        sharpen_threshold: 0.03,
         remove_bg: false,
         bg_threshold: 0.0,
         grow_selection: 1,
@@ -70,10 +75,12 @@ module RubySpriter
     def validate_input_files!
       if options[:video]
         Utils::FileHelper.validate_exists!(options[:video])
+        validate_file_extension!(options[:video], ['.mp4'], '--video')
       end
 
       if options[:image]
         Utils::FileHelper.validate_exists!(options[:image])
+        validate_file_extension!(options[:image], ['.png'], '--image')
       end
 
       if options[:consolidate]
@@ -83,11 +90,21 @@ module RubySpriter
 
         options[:consolidate].each do |file|
           Utils::FileHelper.validate_exists!(file)
+          validate_file_extension!(file, ['.png'], '--consolidate')
         end
       end
 
       if options[:verify]
         Utils::FileHelper.validate_exists!(options[:verify])
+        validate_file_extension!(options[:verify], ['.png'], '--verify')
+      end
+    end
+
+    def validate_file_extension!(file_path, valid_extensions, flag_name)
+      ext = File.extname(file_path).downcase
+      unless valid_extensions.include?(ext)
+        expected = valid_extensions.join(', ')
+        raise ValidationError, "#{flag_name} expects #{expected} file, got: #{ext || '(no extension)'}"
       end
     end
 
