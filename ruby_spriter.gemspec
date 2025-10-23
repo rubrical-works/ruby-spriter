@@ -5,8 +5,8 @@ require_relative 'lib/ruby_spriter/version'
 Gem::Specification.new do |spec|
   spec.name          = 'ruby_spriter'
   spec.version       = RubySpriter::VERSION
-  spec.authors       = ['Your Name']
-  spec.email         = ['your.email@example.com']
+  spec.authors       = ['scooter-indie']
+  spec.email         = ['scooter-indie@users.noreply.github.com']
 
   spec.summary       = 'MP4 to Spritesheet converter with GIMP image processing'
   spec.description   = <<~DESC
