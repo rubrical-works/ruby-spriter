@@ -208,6 +208,13 @@ module RubySpriter
         exit
       end
 
+      opts.on("--version", "Show version information") do
+        puts "Ruby Spriter v#{VERSION}"
+        puts "Platform: #{Platform.current.to_s.capitalize}"
+        puts "Date: #{VERSION_DATE}"
+        exit
+      end
+
       opts.separator ""
       opts.separator "Examples:"
       opts.separator "  ruby_spriter --video input.mp4"
