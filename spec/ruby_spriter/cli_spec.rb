@@ -828,6 +828,301 @@ RSpec.describe RubySpriter::CLI do
     end
   end
 
+  describe '--consolidate flag' do
+    let(:fixture_with_meta) { File.join(__dir__, '..', 'fixtures', 'spritesheet_with_metadata.png') }
+    let(:fixture_without_meta) { File.join(__dir__, '..', 'fixtures', 'image_without_metadata.png') }
+
+    describe 'argument parsing' do
+      it 'accepts comma-separated list of files' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+      end
+
+      it 'accepts three or more files' do
+        # Create a third temp file
+        temp_file = File.join(@test_dir, 'third.png')
+        FileUtils.cp(fixture_with_meta, temp_file)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta, temp_file])
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta},#{temp_file}"])
+      end
+
+      it 'accepts file paths with spaces' do
+        # Create temp files with spaces in names
+        temp_file1 = File.join(@test_dir, 'file with spaces 1.png')
+        temp_file2 = File.join(@test_dir, 'file with spaces 2.png')
+        FileUtils.cp(fixture_with_meta, temp_file1)
+        FileUtils.cp(fixture_without_meta, temp_file2)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([temp_file1, temp_file2])
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{temp_file1},#{temp_file2}"])
+      end
+    end
+
+    describe 'minimum file count validation' do
+      it 'requires at least 2 files' do
+        expect do
+          described_class.start(['--consolidate', fixture_with_meta])
+        end.to raise_error(RubySpriter::ValidationError, /requires at least 2 files/)
+      end
+
+      it 'accepts exactly 2 files' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+        allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+        expect do
+          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        end.not_to raise_error
+      end
+
+      it 'accepts more than 2 files' do
+        temp_file = File.join(@test_dir, 'third.png')
+        FileUtils.cp(fixture_with_meta, temp_file)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+        allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+        expect do
+          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta},#{temp_file}"])
+        end.not_to raise_error
+      end
+    end
+
+    describe 'mutual exclusivity with other input modes' do
+      it 'cannot be used with --video' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'cannot be used with --image' do
+        expect do
+          described_class.start(['--image', fixture_with_meta, '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'cannot be used with --verify' do
+        expect do
+          described_class.start(['--verify', fixture_with_meta, '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
+      end
+
+      it 'can be used alone without error' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+        allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+        expect do
+          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        end.not_to raise_error
+      end
+    end
+
+    describe 'file validation' do
+      describe 'file existence' do
+        it 'raises error if first file does not exist' do
+          expect do
+            described_class.start(['--consolidate', "nonexistent1.png,#{fixture_with_meta}"])
+          end.to raise_error(RubySpriter::ValidationError, /File not found/)
+        end
+
+        it 'raises error if second file does not exist' do
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},nonexistent2.png"])
+          end.to raise_error(RubySpriter::ValidationError, /File not found/)
+        end
+
+        it 'raises error if any file in list does not exist' do
+          temp_file = File.join(@test_dir, 'exists.png')
+          FileUtils.cp(fixture_with_meta, temp_file)
+
+          expect do
+            described_class.start(['--consolidate', "#{temp_file},nonexistent.png,#{fixture_without_meta}"])
+          end.to raise_error(RubySpriter::ValidationError, /File not found/)
+        end
+
+        it 'accepts all existing files' do
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect(File.exist?(fixture_with_meta)).to be true
+          expect(File.exist?(fixture_without_meta)).to be true
+
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          end.not_to raise_error
+        end
+      end
+
+      describe 'file extension validation' do
+        it 'accepts all .png files' do
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          end.not_to raise_error
+        end
+
+        it 'accepts .PNG extension (case insensitive)' do
+          temp_file1 = File.join(@test_dir, 'test1.PNG')
+          temp_file2 = File.join(@test_dir, 'test2.PNG')
+          FileUtils.cp(fixture_with_meta, temp_file1)
+          FileUtils.cp(fixture_without_meta, temp_file2)
+
+          processor_double = instance_double(RubySpriter::Processor)
+          allow(processor_double).to receive(:run)
+          allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
+
+          expect do
+            described_class.start(['--consolidate', "#{temp_file1},#{temp_file2}"])
+          end.not_to raise_error
+        end
+
+        it 'rejects files with .jpg extension' do
+          temp_file = File.join(@test_dir, 'test.jpg')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+          end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file, got: \.jpg/)
+        end
+
+        it 'rejects files with .mp4 extension' do
+          temp_file = File.join(@test_dir, 'test.mp4')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+          end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file, got: \.mp4/)
+        end
+
+        it 'rejects files with no extension' do
+          temp_file = File.join(@test_dir, 'noextension')
+          FileUtils.touch(temp_file)
+
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+          end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file/)
+        end
+
+        it 'validates all files in the list' do
+          temp_file1 = File.join(@test_dir, 'test1.jpg')
+          temp_file2 = File.join(@test_dir, 'test2.gif')
+          FileUtils.touch(temp_file1)
+          FileUtils.touch(temp_file2)
+
+          # Should fail on the first non-PNG file
+          expect do
+            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file1},#{temp_file2}"])
+          end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file/)
+        end
+      end
+    end
+
+    describe 'consolidation-specific options' do
+      it 'works with --validate-columns flag (default true)' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:validate_columns]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--validate-columns'])
+      end
+
+      it 'works with --no-validate-columns flag' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:validate_columns]).to eq(false)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--no-validate-columns'])
+      end
+    end
+
+    describe 'integration with other options' do
+      it 'works with --output option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:output]).to eq('consolidated_output.png')
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--output', 'consolidated_output.png'])
+      end
+
+      it 'works with --debug option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:debug]).to eq(true)
+          expect(options[:keep_temp]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--debug'])
+      end
+
+      it 'works with multiple options combined' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:validate_columns]).to eq(false)
+          expect(options[:output]).to eq('combined.png')
+          expect(options[:debug]).to eq(true)
+          processor_double
+        end
+
+        described_class.start([
+          '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}",
+          '--no-validate-columns',
+          '--output', 'combined.png',
+          '--debug'
+        ])
+      end
+    end
+  end
+
   describe 'error handling' do
     describe 'invalid option' do
       it 'displays error message for invalid option' do
