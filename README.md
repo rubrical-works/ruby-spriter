@@ -355,20 +355,47 @@ ruby_spriter --video input.mp4 --scale 50 --sharpen --debug
 
 ### Processing Pipeline
 
+**Video Mode:**
 ```
-Input (Video/Image)
+Input Video (MP4)
     ↓
-[FFmpeg] Video Frame Extraction (if video)
+[FFmpeg] Frame Extraction + Spritesheet Assembly
     ↓
-[ImageMagick] Spritesheet Assembly
+[ImageMagick] Metadata Embedding
     ↓
 [GIMP] Scale and/or Background Removal (optional)
     ↓
 [ImageMagick] Sharpening (optional)
     ↓
-[ImageMagick] Metadata Embedding
+Output PNG with Metadata
+```
+
+**Image Mode:**
+```
+Input Image (PNG)
+    ↓
+[GIMP] Scale and/or Background Removal (optional)
+    ↓
+[ImageMagick] Sharpening (optional)
+    ↓
+[ImageMagick] Metadata Preservation
     ↓
 Output PNG with Metadata
+```
+
+**Consolidate Mode:**
+```
+Multiple Input PNGs
+    ↓
+[ImageMagick] Read Metadata from Each
+    ↓
+[ImageMagick] Validate Column Compatibility
+    ↓
+[ImageMagick] Vertical Stacking (append)
+    ↓
+[ImageMagick] Embed Combined Metadata
+    ↓
+Output Consolidated PNG
 ```
 
 ### Key Components
