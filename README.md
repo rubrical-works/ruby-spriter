@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.3
+# Ruby Spriter v0.6.4
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -76,34 +76,75 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 
 ## 🚀 Installation
 
-### Step 1: Install External Dependencies
+### Prerequisites (All Installation Methods)
 
-#### **Windows (using Chocolatey)**
+Ruby Spriter requires these external tools for video and image processing:
+
+| Tool | Purpose | Version |
+|------|---------|---------|
+| **FFmpeg** | Video frame extraction | Any recent version |
+| **ImageMagick** | Image manipulation & metadata | 7.x or 6.9+ |
+| **GIMP** | Advanced image processing | 3.x (or 2.10) |
+
+#### Installing Prerequisites
+
+**Windows (Chocolatey)**
 ```powershell
-# Install Chocolatey if needed: https://chocolatey.org/install
-
 choco install ffmpeg imagemagick gimp -y
 ```
 
-#### **macOS (using Homebrew)**
+**macOS (Homebrew)**
 ```bash
 brew install ffmpeg imagemagick gimp
 ```
 
-#### **Linux (Ubuntu/Debian)**
+**Linux (Ubuntu/Debian)**
 ```bash
-sudo apt update
-sudo apt install ffmpeg imagemagick gimp -y
+sudo apt update && sudo apt install ffmpeg imagemagick gimp -y
 ```
 
-### Step 2: Install Ruby Spriter
+---
 
-#### **Option A: Install as Gem (when published)**
+### Choose Your Installation Method
+
+#### 📦 **Option A: RubyGems (Recommended)**
+
+Install the published gem from RubyGems.org:
+
 ```bash
 gem install ruby_spriter
 ```
 
-#### **Option B: Install from Source**
+**Requirements**: Ruby 2.7 or higher
+**Best for**: Ruby developers, automated workflows
+
+---
+
+#### 🪟 **Option B: Windows Standalone Executable**
+
+Download the standalone .exe - **no Ruby installation required!**
+
+1. Go to [Releases](https://github.com/scooter-indie/ruby-spriter/releases)
+2. Download `ruby_spriter-X.Y.Z-windows.exe`
+3. Add to your PATH or run directly
+
+```powershell
+# Run directly
+.\ruby_spriter.exe --version
+
+# Or add to PATH and use anywhere
+ruby_spriter --version
+```
+
+**Best for**: Windows users without Ruby, non-technical users
+**Note**: Still requires FFmpeg, ImageMagick, and GIMP (install via Chocolatey above)
+
+---
+
+#### 🛠️ **Option C: From Source (Development)**
+
+Clone and build from source:
+
 ```bash
 # Clone repository
 git clone https://github.com/scooter-indie/ruby-spriter.git
@@ -114,22 +155,41 @@ bundle install
 
 # Build and install gem locally
 gem build ruby_spriter.gemspec
-gem install ruby_spriter-0.6.3.gem
+gem install ruby_spriter-0.6.4.gem
 ```
 
-### Step 3: Verify Installation
+**Best for**: Contributors, developers wanting latest code
+
+---
+
+### Verify Installation
+
+After installing Ruby Spriter via any method:
 
 ```bash
-# Check Ruby Spriter installation
+# Check Ruby Spriter version
 ruby_spriter --version
 
-# Check all external dependencies
+# Verify all dependencies
 ruby_spriter --check-dependencies
 ```
 
-The `--check-dependencies` command will verify that FFmpeg, FFprobe, ImageMagick, and GIMP are properly installed and accessible. It displays:
-- ✅ Tool found with version/path information
-- ❌ Tool missing with platform-specific installation commands
+The `--check-dependencies` command checks all external tools:
+- ✅ **Tool found**: Shows version and path
+- ❌ **Tool missing**: Shows platform-specific installation commands
+
+Example output:
+```
+Checking external dependencies...
+
+✓ FFmpeg found: 6.0 (C:\ProgramData\chocolatey\bin\ffmpeg.exe)
+✓ FFprobe found: 6.0 (C:\ProgramData\chocolatey\bin\ffprobe.exe)
+✓ ImageMagick (convert) found: 7.1.1-15 (C:\Program Files\ImageMagick\convert.exe)
+✓ ImageMagick (identify) found: 7.1.1-15 (C:\Program Files\ImageMagick\identify.exe)
+✓ GIMP found: 2.99.16 (C:\Program Files\GIMP 3\bin\gimp-2.99.exe)
+
+All dependencies are installed!
+```
 
 ---
 

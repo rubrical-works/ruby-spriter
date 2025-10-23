@@ -12,6 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.4] - 2025-10-23
+
+### 📦 Distribution & Packaging Release
+
+#### Added
+- **GitHub Actions CI/CD Pipeline**: Automated testing across Ruby 2.7-3.3 on Ubuntu, macOS, and Windows
+- **Automated RubyGems Publishing**: Auto-publish gem to RubyGems.org on version tag push
+- **Windows Standalone Executable**: OCRA-based .exe build for non-Ruby users (automated in CI)
+- **Release Automation Workflow**: Multi-platform builds with artifact uploads to GitHub Releases
+- **Code Coverage Reporting**: SimpleCov integration in CI with PR summaries
+
+#### Changed
+- **Installation Options**: Three distinct installation methods (RubyGems, Windows .exe, from source)
+- **README Structure**: Completely restructured installation section with platform-specific guidance
+- **Gemspec Author Info**: Updated from placeholders to actual author details
+- **Build Infrastructure**: Added `build/windows/build.rb` script for OCRA executable generation
+
+#### Distribution
+- **RubyGems**: Published gem with all runtime files
+- **Windows .exe**: Standalone executable with bundled Ruby runtime (external dependencies still required)
+- **Source Install**: Git clone with local gem build option
+
+Closes #18
+
+---
+
 ## [0.6.3] - 2025-10-23
 
 ### 🧪 Testing & Quality Assurance Release
