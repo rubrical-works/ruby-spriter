@@ -12,7 +12,8 @@ module RubySpriter
           if Platform.windows?
             "\"#{path}\""
           else
-            "'#{path.gsub("'", "\\'")}'"
+            # Need 4 backslashes because gsub interprets backslashes in replacement string
+            "'#{path.gsub("'", "\\\\'")}'"
           end
         end
 
@@ -23,7 +24,8 @@ module RubySpriter
           if Platform.windows?
             "\"#{arg}\""
           else
-            "'#{arg.gsub("'", "\\'")}'"
+            # Need 4 backslashes because gsub interprets backslashes in replacement string
+            "'#{arg.gsub("'", "\\\\'")}'"
           end
         end
 

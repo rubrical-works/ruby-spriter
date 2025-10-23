@@ -47,6 +47,10 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Claude Code exports
+*.claude.txt
+*.claude.export
+
 # Output files (examples)
 *_spritesheet.png
 *-scaled-*.png
