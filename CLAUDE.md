@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.1 (Unstable)
+**Current Version**: 0.6.2
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -57,8 +57,16 @@ rspec spec/ruby_spriter/processor_spec.rb:42
 
 ### Checking Dependencies
 ```bash
+# Via rake task (development)
 rake check_deps
+
+# Via CLI flag (production/user-facing)
+ruby_spriter --check-dependencies
 ```
+
+The `--check-dependencies` flag runs `DependencyChecker.print_report` and exits with:
+- Exit code 0 if all dependencies are satisfied
+- Exit code 1 if any dependencies are missing
 
 ### Running the CLI
 ```bash

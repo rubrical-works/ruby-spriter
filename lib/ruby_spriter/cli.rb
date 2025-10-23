@@ -22,6 +22,13 @@ module RubySpriter
 
       parser.parse!(args)
 
+      # Handle special commands that don't need full processing
+      if options[:check_dependencies]
+        checker = DependencyChecker.new(verbose: true)
+        checker.print_report
+        exit(checker.all_satisfied? ? 0 : 1)
+      end
+
       # Run processor
       processor = Processor.new(options)
       processor.run
@@ -208,8 +215,20 @@ module RubySpriter
         exit
       end
 
+      opts.on("--version", "Show version information") do
+        puts "Ruby Spriter v#{VERSION}"
+        puts "Platform: #{Platform.current.to_s.capitalize}"
+        puts "Date: #{VERSION_DATE}"
+        exit
+      end
+
+      opts.on("--check-dependencies", "Check if all required external tools are installed") do
+        options[:check_dependencies] = true
+      end
+
       opts.separator ""
       opts.separator "Examples:"
+      opts.separator "  ruby_spriter --check-dependencies"
       opts.separator "  ruby_spriter --video input.mp4"
       opts.separator "  ruby_spriter --video input.mp4 --remove-bg --scale 50"
       opts.separator "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo --sharpen"
