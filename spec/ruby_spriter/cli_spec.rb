@@ -829,6 +829,13 @@ RSpec.describe RubySpriter::CLI do
   end
 
   describe '--consolidate flag' do
+    # Real spritesheets generated from test_video.mp4 using --video
+    # These demonstrate the actual workflow: --video creates spritesheets, --consolidate combines them
+    let(:spritesheet_4x2) { File.join(__dir__, '..', 'fixtures', 'spritesheet_4x2.png') }  # 2 cols, 2 rows, 4 frames
+    let(:spritesheet_6x2) { File.join(__dir__, '..', 'fixtures', 'spritesheet_6x2.png') }  # 2 cols, 3 rows, 6 frames
+    let(:spritesheet_4x4) { File.join(__dir__, '..', 'fixtures', 'spritesheet_4x4.png') }  # 4 cols, 1 row, 4 frames (different columns)
+
+    # Generic PNG fixtures for edge case testing
     let(:fixture_with_meta) { File.join(__dir__, '..', 'fixtures', 'spritesheet_with_metadata.png') }
     let(:fixture_without_meta) { File.join(__dir__, '..', 'fixtures', 'image_without_metadata.png') }
 
@@ -838,35 +845,31 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
       end
 
       it 'accepts three or more files' do
-        # Create a third temp file
-        temp_file = File.join(@test_dir, 'third.png')
-        FileUtils.cp(fixture_with_meta, temp_file)
-
         processor_double = instance_double(RubySpriter::Processor)
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta, temp_file])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2, spritesheet_4x4])
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta},#{temp_file}"])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2},#{spritesheet_4x4}"])
       end
 
       it 'accepts file paths with spaces' do
         # Create temp files with spaces in names
         temp_file1 = File.join(@test_dir, 'file with spaces 1.png')
         temp_file2 = File.join(@test_dir, 'file with spaces 2.png')
-        FileUtils.cp(fixture_with_meta, temp_file1)
-        FileUtils.cp(fixture_without_meta, temp_file2)
+        FileUtils.cp(spritesheet_4x2, temp_file1)
+        FileUtils.cp(spritesheet_6x2, temp_file2)
 
         processor_double = instance_double(RubySpriter::Processor)
         allow(processor_double).to receive(:run)
@@ -883,7 +886,7 @@ RSpec.describe RubySpriter::CLI do
     describe 'minimum file count validation' do
       it 'requires at least 2 files' do
         expect do
-          described_class.start(['--consolidate', fixture_with_meta])
+          described_class.start(['--consolidate', spritesheet_4x2])
         end.to raise_error(RubySpriter::ValidationError, /requires at least 2 files/)
       end
 
@@ -893,20 +896,17 @@ RSpec.describe RubySpriter::CLI do
         allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
 
         expect do
-          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
         end.not_to raise_error
       end
 
       it 'accepts more than 2 files' do
-        temp_file = File.join(@test_dir, 'third.png')
-        FileUtils.cp(fixture_with_meta, temp_file)
-
         processor_double = instance_double(RubySpriter::Processor)
         allow(processor_double).to receive(:run)
         allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
 
         expect do
-          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta},#{temp_file}"])
+          described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2},#{spritesheet_4x4}"])
         end.not_to raise_error
       end
     end
@@ -914,19 +914,19 @@ RSpec.describe RubySpriter::CLI do
     describe 'mutual exclusivity with other input modes' do
       it 'cannot be used with --video' do
         expect do
-          described_class.start(['--video', 'test.mp4', '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          described_class.start(['--video', 'test.mp4', '--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
         end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
       end
 
       it 'cannot be used with --image' do
         expect do
-          described_class.start(['--image', fixture_with_meta, '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          described_class.start(['--image', spritesheet_4x2, '--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
         end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
       end
 
       it 'cannot be used with --verify' do
         expect do
-          described_class.start(['--verify', fixture_with_meta, '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          described_class.start(['--verify', spritesheet_4x2, '--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
         end.to raise_error(RubySpriter::ValidationError, /Cannot use multiple input modes/)
       end
 
@@ -936,7 +936,7 @@ RSpec.describe RubySpriter::CLI do
         allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
 
         expect do
-          described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+          described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
         end.not_to raise_error
       end
     end
@@ -945,55 +945,52 @@ RSpec.describe RubySpriter::CLI do
       describe 'file existence' do
         it 'raises error if first file does not exist' do
           expect do
-            described_class.start(['--consolidate', "nonexistent1.png,#{fixture_with_meta}"])
+            described_class.start(['--consolidate', "nonexistent1.png,#{spritesheet_4x2}"])
           end.to raise_error(RubySpriter::ValidationError, /File not found/)
         end
 
         it 'raises error if second file does not exist' do
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},nonexistent2.png"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},nonexistent2.png"])
           end.to raise_error(RubySpriter::ValidationError, /File not found/)
         end
 
         it 'raises error if any file in list does not exist' do
-          temp_file = File.join(@test_dir, 'exists.png')
-          FileUtils.cp(fixture_with_meta, temp_file)
-
           expect do
-            described_class.start(['--consolidate', "#{temp_file},nonexistent.png,#{fixture_without_meta}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},nonexistent.png,#{spritesheet_6x2}"])
           end.to raise_error(RubySpriter::ValidationError, /File not found/)
         end
 
-        it 'accepts all existing files' do
+        it 'accepts all existing spritesheet files' do
           processor_double = instance_double(RubySpriter::Processor)
           allow(processor_double).to receive(:run)
           allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
 
-          expect(File.exist?(fixture_with_meta)).to be true
-          expect(File.exist?(fixture_without_meta)).to be true
+          expect(File.exist?(spritesheet_4x2)).to be true
+          expect(File.exist?(spritesheet_6x2)).to be true
 
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
           end.not_to raise_error
         end
       end
 
       describe 'file extension validation' do
-        it 'accepts all .png files' do
+        it 'accepts all .png spritesheet files' do
           processor_double = instance_double(RubySpriter::Processor)
           allow(processor_double).to receive(:run)
           allow(RubySpriter::Processor).to receive(:new).and_return(processor_double)
 
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}"])
           end.not_to raise_error
         end
 
         it 'accepts .PNG extension (case insensitive)' do
           temp_file1 = File.join(@test_dir, 'test1.PNG')
           temp_file2 = File.join(@test_dir, 'test2.PNG')
-          FileUtils.cp(fixture_with_meta, temp_file1)
-          FileUtils.cp(fixture_without_meta, temp_file2)
+          FileUtils.cp(spritesheet_4x2, temp_file1)
+          FileUtils.cp(spritesheet_6x2, temp_file2)
 
           processor_double = instance_double(RubySpriter::Processor)
           allow(processor_double).to receive(:run)
@@ -1009,7 +1006,7 @@ RSpec.describe RubySpriter::CLI do
           FileUtils.touch(temp_file)
 
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{temp_file}"])
           end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file, got: \.jpg/)
         end
 
@@ -1018,7 +1015,7 @@ RSpec.describe RubySpriter::CLI do
           FileUtils.touch(temp_file)
 
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{temp_file}"])
           end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file, got: \.mp4/)
         end
 
@@ -1027,7 +1024,7 @@ RSpec.describe RubySpriter::CLI do
           FileUtils.touch(temp_file)
 
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{temp_file}"])
           end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file/)
         end
 
@@ -1039,7 +1036,7 @@ RSpec.describe RubySpriter::CLI do
 
           # Should fail on the first non-PNG file
           expect do
-            described_class.start(['--consolidate', "#{fixture_with_meta},#{temp_file1},#{temp_file2}"])
+            described_class.start(['--consolidate', "#{spritesheet_4x2},#{temp_file1},#{temp_file2}"])
           end.to raise_error(RubySpriter::ValidationError, /--consolidate expects \.png file/)
         end
       end
@@ -1051,12 +1048,12 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           expect(options[:validate_columns]).to eq(true)
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--validate-columns'])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--validate-columns'])
       end
 
       it 'works with --no-validate-columns flag' do
@@ -1064,12 +1061,12 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           expect(options[:validate_columns]).to eq(false)
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--no-validate-columns'])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--no-validate-columns'])
       end
     end
 
@@ -1079,12 +1076,12 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           expect(options[:output]).to eq('consolidated_output.png')
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--output', 'consolidated_output.png'])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--output', 'consolidated_output.png'])
       end
 
       it 'works with --debug option' do
@@ -1092,13 +1089,13 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           expect(options[:debug]).to eq(true)
           expect(options[:keep_temp]).to eq(true)
           processor_double
         end
 
-        described_class.start(['--consolidate', "#{fixture_with_meta},#{fixture_without_meta}", '--debug'])
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--debug'])
       end
 
       it 'works with multiple options combined' do
@@ -1106,7 +1103,7 @@ RSpec.describe RubySpriter::CLI do
         allow(processor_double).to receive(:run)
 
         allow(RubySpriter::Processor).to receive(:new) do |options|
-          expect(options[:consolidate]).to eq([fixture_with_meta, fixture_without_meta])
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
           expect(options[:validate_columns]).to eq(false)
           expect(options[:output]).to eq('combined.png')
           expect(options[:debug]).to eq(true)
@@ -1114,7 +1111,7 @@ RSpec.describe RubySpriter::CLI do
         end
 
         described_class.start([
-          '--consolidate', "#{fixture_with_meta},#{fixture_without_meta}",
+          '--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}",
           '--no-validate-columns',
           '--output', 'combined.png',
           '--debug'
