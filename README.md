@@ -116,32 +116,11 @@ gem install ruby_spriter
 ```
 
 **Requirements**: Ruby 2.7 or higher
-**Best for**: Ruby developers, automated workflows
+**Best for**: All platforms (Windows, macOS, Linux), automated workflows
 
 ---
 
-#### 🪟 **Option B: Windows Standalone Executable**
-
-Download the standalone .exe - **no Ruby installation required!**
-
-1. Go to [Releases](https://github.com/scooter-indie/ruby-spriter/releases)
-2. Download `ruby_spriter-X.Y.Z-windows.exe`
-3. Add to your PATH or run directly
-
-```powershell
-# Run directly
-.\ruby_spriter.exe --version
-
-# Or add to PATH and use anywhere
-ruby_spriter --version
-```
-
-**Best for**: Windows users without Ruby, non-technical users
-**Note**: Still requires FFmpeg, ImageMagick, and GIMP (install via Chocolatey above)
-
----
-
-#### 🛠️ **Option C: From Source (Development)**
+#### 🛠️ **Option B: From Source (Development)**
 
 Clone and build from source:
 
