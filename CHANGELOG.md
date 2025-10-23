@@ -19,20 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 - **GitHub Actions CI/CD Pipeline**: Automated testing across Ruby 2.7-3.3 on Ubuntu, macOS, and Windows
 - **Automated RubyGems Publishing**: Auto-publish gem to RubyGems.org on version tag push
-- **Windows Standalone Executable**: OCRA-based .exe build for non-Ruby users (automated in CI)
-- **Release Automation Workflow**: Multi-platform builds with artifact uploads to GitHub Releases
+- **Release Automation Workflow**: Multi-platform gem builds with artifact uploads to GitHub Releases
 - **Code Coverage Reporting**: SimpleCov integration in CI with PR summaries
 
 #### Changed
-- **Installation Options**: Three distinct installation methods (RubyGems, Windows .exe, from source)
-- **README Structure**: Completely restructured installation section with platform-specific guidance
+- **Installation Options**: Two installation methods (RubyGems for all platforms, from source)
+- **README Structure**: Simplified installation section focusing on gem distribution
 - **Gemspec Author Info**: Updated from placeholders to actual author details
-- **Build Infrastructure**: Added `build/windows/build.rb` script for OCRA executable generation
 
 #### Distribution
-- **RubyGems**: Published gem with all runtime files
-- **Windows .exe**: Standalone executable with bundled Ruby runtime (external dependencies still required)
+- **RubyGems**: Published gem with all runtime files (works on Windows, macOS, Linux)
 - **Source Install**: Git clone with local gem build option
+
+#### Deferred
+- **Windows Standalone Executable**: Deferred due to OCRA incompatibility with Ruby 3.x
+  - OCRA 1.3.11 (last version, 2019) fails with Ruby 3.2+ due to internal fiber changes
+  - Windows users can use `gem install ruby_spriter` after installing Ruby
+  - Will revisit when better Windows packaging tools become available
 
 Closes #18
 

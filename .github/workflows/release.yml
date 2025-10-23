@@ -14,12 +14,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         ruby-version: ['3.3']
-        include:
-          # Use Ruby 3.2 for Windows builds due to OCRA compatibility
-          - os: windows-latest
-            ruby-version: '3.2'
 
     steps:
       - name: Checkout code
@@ -40,37 +36,11 @@ jobs:
       - name: Build gem
         run: gem build ruby_spriter.gemspec
 
-      - name: Get version from tag
-        id: get_version
-        shell: bash
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
-      - name: Install OCRA (Windows only)
-        if: matrix.os == 'windows-latest'
-        run: gem install ocra
-
-      - name: Build Windows executable
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          ruby build/windows/build.rb
-          mv ruby_spriter.exe ruby_spriter-${{ steps.get_version.outputs.version }}-windows.exe
-
       - name: Upload gem artifact
         uses: actions/upload-artifact@v4
         with:
           name: gem-${{ matrix.os }}
           path: ruby_spriter-*.gem
-
-      - name: Upload Windows exe artifact
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-exe
-          path: ruby_spriter-*-windows.exe
 
   publish:
     name: Publish to RubyGems and Create GitHub Release
@@ -90,11 +60,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gem-ubuntu-latest
-
-      - name: Download Windows exe artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-exe
 
       - name: Get version and changelog
         id: get_info
@@ -121,9 +86,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           body_path: release_notes.md
-          files: |
-            ruby_spriter-*.gem
-            ruby_spriter-*-windows.exe
+          files: ruby_spriter-*.gem
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
