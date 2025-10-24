@@ -707,6 +707,33 @@ RSpec.describe RubySpriter::CLI do
         expect(output.string).to include('Video Mode')
       end
 
+      it 'shows parent-child option hierarchy in video mode help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        # Check for parent options
+        expect(output.string).to include('-s, --scale PERCENT')
+        expect(output.string).to include('-r, --remove-bg')
+
+        # Check for child options with hierarchy marker
+        expect(output.string).to include('└─ Interpolation:')
+        expect(output.string).to include('└─ Apply unsharp mask')
+        expect(output.string).to include('└─ Use fuzzy select')
+        expect(output.string).to include('└─ Feather radius')
+        expect(output.string).to include('└─ Grow selection')
+
+        # Check that --order mentions BOTH requirement
+        expect(output.string).to match(/order.*BOTH.*--scale.*AND.*--remove-bg/i)
+      end
+
       it 'shows image mode help with --help' do
         output = StringIO.new
         $stdout = output

@@ -44,18 +44,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ruby_spriter --batch --help`: Shows batch processing options (directory processing, applied options)
   - `ruby_spriter --split --help`: Shows frame extraction options (split format, metadata behavior, output)
   - General `--help`: Shows mode-specific help hints and directs users to detailed help
-  - Organized by function (Processing Options, Output Options) instead of by tool (GIMP Processing Options)
+  - **Parent-Child Option Hierarchy**: Visual hierarchy (└─) shows modifier options grouped under parent options
+    - `--interpolation`, `--sharpen*` modifiers shown under `--scale`
+    - `--fuzzy`, `--threshold`, `--grow` modifiers shown under `--remove-bg`
+    - `--override-md` modifier shown under `--split`
+    - `--validate-columns` modifier shown under `--consolidate --dir`
+  - Organized by function (Image Processing, Output Options) instead of by tool (GIMP Processing Options)
 - **New Modules**:
   - `BatchProcessor` (lib/ruby_spriter/batch_processor.rb): Orchestrates batch video processing
   - `CompressionManager` (lib/ruby_spriter/compression_manager.rb): Handles PNG compression with metadata preservation
 - **New Public Method**: `Consolidator#find_spritesheets_in_directory(directory)` for directory scanning
-- **Comprehensive Test Coverage**: 45 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 6 for context-sensitive help)
+- **Comprehensive Test Coverage**: 46 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 7 for context-sensitive help)
 
 #### Changed
 - **CLI**: Updated `--consolidate` description to mention `--dir` option
 - **CLI**: Renamed "GIMP Processing Options" to "Processing Options" for tool-agnostic organization
 - **Processor**: Refactored consolidation workflow to support both file list and directory modes
-- **Test Suite**: Increased from 274 to 319 examples (all passing), 78.84% line coverage
+- **Test Suite**: Increased from 274 to 320 examples (all passing), 78.95% line coverage
+- **CLI**: Added parent-child visual hierarchy to all context-sensitive help displays
 
 #### Examples
 ```bash
