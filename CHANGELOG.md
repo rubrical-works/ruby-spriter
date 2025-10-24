@@ -12,6 +12,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.7] - 2025-10-24
+
+### 🚀 Batch Processing & Compression Release
+
+#### Added
+- **Batch Processing Mode** (`--batch`): Process multiple MP4 files in a directory (Issue #16)
+  - `--dir DIRECTORY`: Specify directory containing MP4 files to process
+  - `--outputdir DIRECTORY`: Optional output directory (defaults to input directory)
+  - `--batch-consolidate`: Automatically consolidate all resulting spritesheets
+  - Supports all existing processing options: `--scale`, `--remove-bg`, `--sharpen`, `--interpolation`, etc.
+  - Enforces unique filenames unless `--overwrite` is specified
+  - Continues processing remaining videos if one fails
+  - Provides detailed summary of successes and failures
+- **Maximum Compression** (`--max-compress`): Apply maximum PNG compression (Issue #14)
+  - Uses ImageMagick with optimal compression settings (level 9, filter 5, strategy 1, quality 95)
+  - Preserves embedded metadata through compression
+  - Works with all processing modes: `--video`, `--image`, `--batch`, `--consolidate`
+  - Displays compression statistics (original size, compressed size, savings, reduction percentage)
+- **New Modules**:
+  - `BatchProcessor` (lib/ruby_spriter/batch_processor.rb): Orchestrates batch video processing
+  - `CompressionManager` (lib/ruby_spriter/compression_manager.rb): Handles PNG compression with metadata preservation
+- **Comprehensive Test Coverage**: 24 new tests (13 for BatchProcessor, 11 for CompressionManager)
+
+#### Changed
+- **Test Suite**: Increased from 274 to 298 examples (all passing)
+- **Line Coverage**: Maintained at 72.94% (825 / 1131 lines)
+
+#### Examples
+```bash
+# Process all videos in directory
+ruby_spriter --batch --dir "videos/"
+
+# Process with output to different directory
+ruby_spriter --batch --dir "videos/" --outputdir "output/"
+
+# Process and consolidate all results
+ruby_spriter --batch --dir "videos/" --batch-consolidate
+
+# Process with scaling and compression
+ruby_spriter --batch --dir "videos/" --scale 50 --max-compress
+
+# Compress video output
+ruby_spriter --video "input.mp4" --max-compress
+
+# Compress image processing output
+ruby_spriter --image "sprite.png" --scale 50 --max-compress
+```
+
+Closes #14, #16
+
+---
+
 ## [0.6.6] - 2025-10-23
 
 ### 🔒 File Protection & Frame Extraction Release

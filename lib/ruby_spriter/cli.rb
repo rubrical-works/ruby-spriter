@@ -64,13 +64,29 @@ module RubySpriter
 
     def add_input_options(opts, options)
       opts.separator "Input Options:"
-      
+
       opts.on("-v", "--video FILE", "Input video file (MP4)") do |v|
         options[:video] = v
       end
 
       opts.on("-i", "--image FILE", "Input image file (PNG) for direct processing") do |i|
         options[:image] = i
+      end
+
+      opts.on("--batch", "Batch process all MP4 files in directory") do
+        options[:batch] = true
+      end
+
+      opts.on("--dir DIRECTORY", "Directory for batch processing") do |d|
+        options[:dir] = d
+      end
+
+      opts.on("--outputdir DIRECTORY", "Output directory for batch processing") do |d|
+        options[:outputdir] = d
+      end
+
+      opts.on("--batch-consolidate", "Consolidate all spritesheets after batch processing") do
+        options[:batch_consolidate] = true
       end
 
       opts.on("--consolidate FILES", Array, "Consolidate multiple spritesheets (comma-separated)") do |c|
@@ -220,6 +236,10 @@ module RubySpriter
     def add_other_options(opts, options)
       opts.separator "Other Options:"
 
+      opts.on("--max-compress", "Apply maximum PNG compression to output") do
+        options[:max_compress] = true
+      end
+
       opts.on("--overwrite", "Overwrite existing output files (default: create unique filenames)") do
         options[:overwrite] = true
       end
@@ -255,8 +275,12 @@ module RubySpriter
       opts.separator "  ruby_spriter --video input.mp4"
       opts.separator "  ruby_spriter --video input.mp4 --remove-bg --scale 50"
       opts.separator "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo --sharpen"
+      opts.separator "  ruby_spriter --video input.mp4 --max-compress"
       opts.separator "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
       opts.separator "  ruby_spriter --image sprite.png --remove-bg --fuzzy"
+      opts.separator "  ruby_spriter --batch --dir videos/"
+      opts.separator "  ruby_spriter --batch --dir videos/ --outputdir output/"
+      opts.separator "  ruby_spriter --batch --dir videos/ --batch-consolidate --max-compress"
       opts.separator "  ruby_spriter --consolidate file1.png,file2.png,file3.png"
       opts.separator "  ruby_spriter --verify spritesheet.png"
       opts.separator ""

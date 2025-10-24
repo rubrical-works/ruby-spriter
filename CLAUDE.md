@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.2
+**Current Version**: 0.6.7
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -81,12 +81,13 @@ bundle exec ruby_spriter --help
 
 ### Processing Modes
 
-Ruby Spriter operates in four distinct modes, orchestrated by `Processor`:
+Ruby Spriter operates in five distinct modes, orchestrated by `Processor`:
 
 1. **Video Mode** (`--video`): Convert MP4 to spritesheet using `VideoProcessor`
 2. **Image Mode** (`--image`): Process existing PNG with GIMP using `GimpProcessor`
 3. **Consolidate Mode** (`--consolidate`): Stack multiple spritesheets using `Consolidator`
-4. **Verify Mode** (`--verify`): Read and display embedded metadata
+4. **Batch Mode** (`--batch`): Process multiple MP4 files in a directory using `BatchProcessor`
+5. **Verify Mode** (`--verify`): Read and display embedded metadata
 
 ### Core Processing Pipeline
 
@@ -122,6 +123,22 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Validates column compatibility between spritesheets
 - Uses ImageMagick's `-append` to stack vertically
 - Calculates combined metadata (total frames, new row count)
+
+**BatchProcessor** (lib/ruby_spriter/batch_processor.rb)
+- Processes multiple MP4 files in a directory
+- Finds all videos and processes each with consistent options
+- Supports all video and image processing options (scale, remove-bg, sharpen, etc.)
+- Enforces unique filenames unless --overwrite is specified
+- Continues processing remaining videos if one fails
+- Optional consolidation of all resulting spritesheets via --batch-consolidate
+- Supports --outputdir to write outputs to a different directory
+
+**CompressionManager** (lib/ruby_spriter/compression_manager.rb)
+- Compresses PNG files using ImageMagick with maximum compression settings
+- Uses compression level 9, filter 5 (Paeth), strategy 1, quality 95
+- Preserves embedded metadata through compression via re-embedding
+- Provides compression statistics (original size, compressed size, reduction percentage)
+- Works with all processing modes: --video, --image, --batch, --consolidate
 
 **MetadataManager** (lib/ruby_spriter/metadata_manager.rb)
 - Embeds spritesheet grid info into PNG comment field using ImageMagick

@@ -79,10 +79,10 @@ module RubySpriter
     end
 
     def validate_options!
-      input_modes = [options[:video], options[:image], options[:consolidate], options[:verify]].compact
+      input_modes = [options[:video], options[:image], options[:consolidate], options[:verify], options[:batch]].compact
 
       if input_modes.empty?
-        raise ValidationError, "Must specify --video, --image, --consolidate, or --verify"
+        raise ValidationError, "Must specify --video, --image, --consolidate, --verify, or --batch"
       end
 
       if input_modes.length > 1
@@ -231,7 +231,9 @@ module RubySpriter
         return { mode: :verify, file: options[:verify] }
       end
 
-      if options[:consolidate]
+      if options[:batch]
+        return execute_batch_workflow
+      elsif options[:consolidate]
         return execute_consolidate_workflow
       elsif options[:image]
         return execute_image_workflow
@@ -277,7 +279,12 @@ module RubySpriter
       # Step 5: Clean up intermediate files
       cleanup_intermediate_files(intermediate_files)
 
-      # Step 6: Extract individual frames if requested
+      # Step 6: Apply max compression if requested
+      if options[:max_compress]
+        working_file = apply_max_compression(working_file)
+      end
+
+      # Step 7: Extract individual frames if requested
       if options[:save_frames]
         split_frames_from_spritesheet(working_file, result[:columns], result[:rows], result[:frames])
       end
@@ -317,6 +324,11 @@ module RubySpriter
       # Clean up intermediate files
       cleanup_intermediate_files(intermediate_files)
 
+      # Apply max compression if requested
+      if options[:max_compress]
+        working_file = apply_max_compression(working_file)
+      end
+
       # Determine if we should split the image into frames
       should_split = options[:save_frames] || options[:split]
 
@@ -346,10 +358,23 @@ module RubySpriter
 
       result = consolidator.consolidate(options[:consolidate], final_output)
 
+      # Apply max compression if requested
+      if options[:max_compress]
+        final_output = apply_max_compression(result[:output_file])
+        result[:output_file] = final_output
+      end
+
       Utils::OutputFormatter.header("SUCCESS!")
       Utils::OutputFormatter.success("Final output: #{result[:output_file]}")
 
       result.merge(mode: :consolidate)
+    end
+
+    def execute_batch_workflow
+      batch_processor = BatchProcessor.new(options)
+      result = batch_processor.process
+
+      result.merge(mode: :batch)
     end
 
     def process_with_gimp(input_file)
@@ -476,6 +501,29 @@ module RubySpriter
       unless height % rows == 0
         raise ValidationError, "Image height (#{height}) not evenly divisible by #{rows} rows"
       end
+    end
+
+    def apply_max_compression(file)
+      Utils::OutputFormatter.note("Applying maximum compression...")
+
+      original_size = File.size(file)
+      temp_file = file.gsub('.png', '_compressed_temp.png')
+
+      CompressionManager.compress_with_metadata(file, temp_file, debug: options[:debug])
+
+      # Show compression stats
+      stats = CompressionManager.compression_stats(file, temp_file)
+
+      if options[:debug] || stats[:saved_bytes] > 0
+        Utils::OutputFormatter.indent("Original: #{Utils::FileHelper.format_size(stats[:original_size])}")
+        Utils::OutputFormatter.indent("Compressed: #{Utils::FileHelper.format_size(stats[:compressed_size])}")
+        Utils::OutputFormatter.indent("Saved: #{Utils::FileHelper.format_size(stats[:saved_bytes])} (#{stats[:reduction_percent].round(1)}% reduction)")
+      end
+
+      # Replace original with compressed
+      FileUtils.mv(temp_file, file)
+
+      file
     end
   end
 end
