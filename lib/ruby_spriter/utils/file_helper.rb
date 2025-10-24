@@ -51,6 +51,31 @@ module RubySpriter
           validate_exists!(path)
           raise ValidationError, "File not readable: #{path}" unless File.readable?(path)
         end
+
+        # Generate unique filename by adding timestamp if file exists
+        # @param path [String] Original file path
+        # @return [String] Unique file path (adds timestamp if original exists)
+        def unique_filename(path)
+          return path unless File.exist?(path)
+
+          dir = File.dirname(path)
+          ext = File.extname(path)
+          basename = File.basename(path, ext)
+          timestamp = Time.now.strftime('%Y%m%d_%H%M%S_%3N') # Include milliseconds
+
+          File.join(dir, "#{basename}_#{timestamp}#{ext}")
+        end
+
+        # Ensure output filename is unique based on overwrite option
+        # @param path [String] Desired output path
+        # @param overwrite [Boolean] If true, return original path; if false, make unique
+        # @return [String] Output path (unique if overwrite is false and file exists)
+        def ensure_unique_output(path, overwrite: false)
+          return path if overwrite
+          return path unless File.exist?(path)
+
+          unique_filename(path)
+        end
       end
     end
   end

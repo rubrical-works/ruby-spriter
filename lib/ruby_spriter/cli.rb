@@ -81,6 +81,14 @@ module RubySpriter
         options[:verify] = v
       end
 
+      opts.on("--split R:C", "Split image into frames (rows:columns, e.g., 4:4)") do |s|
+        options[:split] = s
+      end
+
+      opts.on("--override-md", "Override embedded metadata when using --split") do
+        options[:override_md] = true
+      end
+
       opts.separator ""
     end
 
@@ -105,6 +113,10 @@ module RubySpriter
 
       opts.on("-b", "--background COLOR", "Tile background: black, white (default: black)") do |b|
         options[:bg_color] = b
+      end
+
+      opts.on("--save-frames", "Save individual frames to disk (video only)") do
+        options[:save_frames] = true
       end
 
       opts.separator ""
@@ -207,6 +219,10 @@ module RubySpriter
 
     def add_other_options(opts, options)
       opts.separator "Other Options:"
+
+      opts.on("--overwrite", "Overwrite existing output files (default: create unique filenames)") do
+        options[:overwrite] = true
+      end
 
       opts.on("--keep-temp", "Keep temporary files for debugging") do
         options[:keep_temp] = true
