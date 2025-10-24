@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.8
+# Ruby Spriter v0.6.7
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -137,7 +137,7 @@ bundle install
 
 # Build and install gem locally
 gem build ruby_spriter.gemspec
-gem install ruby_spriter-0.6.8.gem
+gem install ruby_spriter-0.6.7.gem
 ```
 
 **Best for**: Contributors, developers wanting latest code
@@ -232,7 +232,7 @@ ruby_spriter --batch --dir "videos/" --batch-consolidate
 # Consolidate specific files (comma-separated)
 ruby_spriter --consolidate file1.png,file2.png,file3.png
 
-# Consolidate all spritesheets in a directory (v0.6.8+)
+# Consolidate all spritesheets in a directory (v0.6.7+)
 ruby_spriter --consolidate --dir "spritesheets/"
 
 # Consolidate with compression
@@ -369,7 +369,7 @@ ruby_spriter --consolidate \
   walk_s.png,walk_sw.png,walk_w.png,walk_nw.png \
   --output character_walk_all.png
 
-# Or consolidate all spritesheets in a directory (v0.6.8+)
+# Or consolidate all spritesheets in a directory (v0.6.7+)
 ruby_spriter --consolidate --dir "walk_cycles/" \
   --output character_walk_all.png
 ```
@@ -461,7 +461,7 @@ ruby_spriter --consolidate --dir "sprites/" --max-compress
 - Preserves embedded spritesheet metadata
 - Displays size reduction statistics
 
-### Directory-Based Consolidation (v0.6.8+)
+### Directory-Based Consolidation (v0.6.7+)
 
 Consolidate all spritesheets in a directory automatically:
 
