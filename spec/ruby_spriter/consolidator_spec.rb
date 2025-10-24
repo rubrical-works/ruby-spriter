@@ -440,9 +440,24 @@ RSpec.describe RubySpriter::Consolidator do
     it 'returns files sorted alphabetically' do
       test_dir = create_test_dir
       # Copy spritesheets with names that test alphabetical sorting
-      FileUtils.cp(spritesheet1, File.join(test_dir, 'c_sprite.png'))
-      FileUtils.cp(spritesheet2, File.join(test_dir, 'a_sprite.png'))
-      FileUtils.cp(spritesheet3, File.join(test_dir, 'b_sprite.png'))
+      c_sprite_path = File.join(test_dir, 'c_sprite.png')
+      a_sprite_path = File.join(test_dir, 'a_sprite.png')
+      b_sprite_path = File.join(test_dir, 'b_sprite.png')
+      FileUtils.cp(spritesheet1, c_sprite_path)
+      FileUtils.cp(spritesheet2, a_sprite_path)
+      FileUtils.cp(spritesheet3, b_sprite_path)
+
+      # Mock metadata reading
+      allow(RubySpriter::MetadataManager).to receive(:read).and_call_original
+      allow(RubySpriter::MetadataManager).to receive(:read).with(c_sprite_path).and_return(
+        { columns: 4, rows: 1, frames: 4, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(a_sprite_path).and_return(
+        { columns: 2, rows: 3, frames: 6, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(b_sprite_path).and_return(
+        { columns: 4, rows: 4, frames: 16, version: '0.6' }
+      )
 
       found_files = consolidator.find_spritesheets_in_directory(test_dir)
 
@@ -481,10 +496,21 @@ RSpec.describe RubySpriter::Consolidator do
     it 'handles directory with mixed file types' do
       test_dir = create_test_dir
       # Copy spritesheets and create non-PNG files
-      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
-      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
+      sprite1_path = File.join(test_dir, 'sprite1.png')
+      sprite2_path = File.join(test_dir, 'sprite2.png')
+      FileUtils.cp(spritesheet1, sprite1_path)
+      FileUtils.cp(spritesheet2, sprite2_path)
       File.write(File.join(test_dir, 'readme.txt'), 'test')
       File.write(File.join(test_dir, 'data.json'), '{}')
+
+      # Mock metadata reading
+      allow(RubySpriter::MetadataManager).to receive(:read).and_call_original
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite1_path).and_return(
+        { columns: 2, rows: 2, frames: 4, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite2_path).and_return(
+        { columns: 2, rows: 3, frames: 6, version: '0.6' }
+      )
 
       found_files = consolidator.find_spritesheets_in_directory(test_dir)
 
@@ -495,7 +521,14 @@ RSpec.describe RubySpriter::Consolidator do
     it 'requires at least 2 spritesheets' do
       test_dir = create_test_dir
       # Copy only one spritesheet
-      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
+      sprite1_path = File.join(test_dir, 'sprite1.png')
+      FileUtils.cp(spritesheet1, sprite1_path)
+
+      # Mock metadata reading
+      allow(RubySpriter::MetadataManager).to receive(:read).and_call_original
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite1_path).and_return(
+        { columns: 2, rows: 2, frames: 4, version: '0.6' }
+      )
 
       expect {
         consolidator.find_spritesheets_in_directory(test_dir)
