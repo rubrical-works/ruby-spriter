@@ -17,12 +17,14 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 🖼️ **Advanced Image Processing** - Scale, sharpen, and remove backgrounds with precision
 - 🎨 **Quality Enhancement** - 5 interpolation methods and configurable unsharp masking
 - 📐 **Spritesheet Consolidation** - Merge multiple spritesheets vertically (file list or directory)
-- 📊 **Metadata Management** - Embed and verify grid information in PNG files
+- 📊 **Metadata Management** - Embed, verify, and add grid information to PNG files
+- 🎯 **Frame Extraction** - Extract specific frames by number and create new spritesheets
+- 🏷️ **Metadata Addition** - Add spritesheet metadata to external images
 - 🔒 **Automatic File Protection** - Unique timestamped filenames prevent accidental overwrites (v0.6.6+)
 - 📦 **Batch Processing** - Process multiple MP4 files in a directory automatically (v0.6.7+)
 - 🗜️ **Maximum Compression** - Optimal PNG compression while preserving metadata (v0.6.7+)
 - 🌍 **Cross-Platform** - Works seamlessly on Windows, Linux, and macOS
-- 🧪 **Production Ready** - Comprehensive RSpec test coverage (313 tests)
+- 🧪 **Production Ready** - Comprehensive RSpec test coverage (365 tests)
 
 ### Image Processing Features
 
@@ -239,6 +241,38 @@ ruby_spriter --consolidate --dir "spritesheets/"
 ruby_spriter --consolidate --dir "spritesheets/" --max-compress
 ```
 
+### Frame Extraction (v0.6.8+)
+```bash
+# Extract specific frames by number
+ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3
+
+# Extract with duplicates for animation loops
+ruby_spriter --image sprite.png --extract 1,1,2,2,3,3
+
+# Extract, process, and save frames
+ruby_spriter --image sprite.png --extract 1,3,5,7 \
+  --scale 50 --sharpen --save-frames
+
+# Workflow: Add metadata then extract frames
+ruby_spriter --image external.png --add-meta 4:4
+ruby_spriter --image external.png --extract 1,5,9,13 --columns 2
+```
+
+### Metadata Management (v0.6.8+)
+```bash
+# Add metadata to external spritesheet
+ruby_spriter --image sprite.png --add-meta 4:4
+
+# Add metadata with partial grid (14 frames in 4x4 grid)
+ruby_spriter --image sprite.png --add-meta 4:4 --frames 14
+
+# Replace existing metadata
+ruby_spriter --image existing.png --add-meta 8:8 --overwrite-meta
+
+# Add metadata and copy to new file
+ruby_spriter --image sprite.png --add-meta 4:4 --output sprite_meta.png
+```
+
 ### Advanced Workflows
 ```bash
 # Complete processing pipeline with compression
@@ -324,6 +358,21 @@ ruby_spriter --image large_sprite.png \
 #### **Compression Options (v0.6.7+)**
 ```bash
     --max-compress            Apply maximum PNG compression (preserves metadata)
+```
+
+#### **Frame Extraction Options (v0.6.8+)**
+```bash
+    --extract FRAMES          Extract specific frames by number (e.g., 1,2,4,5,8)
+    --columns NUM             Output grid columns for extracted spritesheet (default: 4)
+    --save-frames             Keep individual extracted frames on disk
+    --split R:C               Split spritesheet into all individual frames (rows:columns)
+    --override-md             Override embedded metadata when using --split
+```
+
+#### **Metadata Management Options (v0.6.8+)**
+```bash
+    --add-meta R:C            Add spritesheet metadata (rows:columns, e.g., 4:4)
+    --overwrite-meta          Replace existing metadata
 ```
 
 #### **Other Options**

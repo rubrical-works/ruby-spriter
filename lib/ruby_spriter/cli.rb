@@ -35,6 +35,16 @@ module RubySpriter
         exit(checker.all_satisfied? ? 0 : 1)
       end
 
+      # Validate mutually exclusive options
+      if options[:extract] && options[:split]
+        raise ValidationError, "--extract and --split are mutually exclusive"
+      end
+
+      # Validate --add-meta cannot be combined with processing options
+      if options[:add_meta] && (options[:scale_percent] || options[:remove_bg] || options[:sharpen])
+        raise ValidationError, "--add-meta cannot be combined with processing options (--scale, --remove-bg, --sharpen)"
+      end
+
       # Run processor
       processor = Processor.new(options)
       processor.run
@@ -119,6 +129,22 @@ module RubySpriter
         options[:override_md] = true
       end
 
+      opts.on("--extract FRAMES", "Extract specific frames by number (comma-separated, e.g., 1,2,4,5,8)") do |e|
+        options[:extract] = e
+      end
+
+      opts.on("--columns NUM", Integer, "Number of columns for extracted spritesheet (default: 4)") do |c|
+        options[:columns] = c
+      end
+
+      opts.on("--add-meta R:C", "Add spritesheet metadata to image (rows:columns, e.g., 4:4)") do |m|
+        options[:add_meta] = m
+      end
+
+      opts.on("--overwrite-meta", "Overwrite existing metadata when using --add-meta") do
+        options[:overwrite_meta] = true
+      end
+
       opts.separator ""
     end
 
@@ -145,7 +171,7 @@ module RubySpriter
         options[:bg_color] = b
       end
 
-      opts.on("--save-frames", "Save individual frames to disk (video only)") do
+      opts.on("--save-frames", "Save individual frames to disk (for --video or --extract)") do
         options[:save_frames] = true
       end
 
@@ -404,9 +430,18 @@ module RubySpriter
       puts "  --order ORDER                    Operation order when using BOTH --scale AND --remove-bg:"
       puts "                                   scale_first or bg_first (default: scale_first)"
       puts ""
-      puts "Frame Extraction:"
-      puts "  --split R:C                      Split spritesheet into frames (rows:columns, e.g., 4:4)"
+      puts "Frame Extraction & Reassembly:"
+      puts "  --split R:C                      Split spritesheet into all individual frames (rows:columns)"
       puts "    --override-md                  └─ Override embedded metadata"
+      puts ""
+      puts "  --extract FRAMES                 Extract specific frames and create new spritesheet (e.g., 1,2,4,5,8)"
+      puts "    --columns NUM                  └─ Output grid columns (default: 4)"
+      puts "    --save-frames                  └─ Keep individual extracted frames on disk"
+      puts ""
+      puts "Metadata Management:"
+      puts "  --add-meta R:C                   Add spritesheet metadata (rows:columns, e.g., 4:4)"
+      puts "    --overwrite-meta               └─ Replace existing metadata"
+      puts "    -f, --frames COUNT             └─ Custom frame count for partial grids"
       puts ""
       puts "Output Options:"
       puts "  -o, --output FILE                Output file path"
@@ -420,6 +455,10 @@ module RubySpriter
       puts "  ruby_spriter --image sprite.png --remove-bg --fuzzy --threshold 1.0"
       puts "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
       puts "  ruby_spriter --image sprite.png --split 4:4 --override-md"
+      puts "  ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3"
+      puts "  ruby_spriter --image sprite.png --extract 1,1,2,2,3,3 --save-frames"
+      puts "  ruby_spriter --image sprite.png --add-meta 4:4"
+      puts "  ruby_spriter --image sprite.png --add-meta 4:4 --frames 14 --output sprite_meta.png"
       puts ""
       exit
     end

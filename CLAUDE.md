@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.7
+**Current Version**: 0.6.8
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -81,10 +81,12 @@ bundle exec ruby_spriter --help
 
 ### Processing Modes
 
-Ruby Spriter operates in five distinct modes, orchestrated by `Processor`:
+Ruby Spriter operates in seven distinct modes, orchestrated by `Processor`:
 
 1. **Video Mode** (`--video`): Convert MP4 to spritesheet using `VideoProcessor`
 2. **Image Mode** (`--image`): Process existing PNG with GIMP using `GimpProcessor`
+   - **Extract Sub-mode** (`--extract`): Extract specific frames and create new spritesheet (v0.6.8+)
+   - **Add Metadata Sub-mode** (`--add-meta`): Add metadata to external spritesheets (v0.6.8+)
 3. **Consolidate Mode** (`--consolidate`): Stack multiple spritesheets using `Consolidator`
 4. **Batch Mode** (`--batch`): Process multiple MP4 files in a directory using `BatchProcessor`
 5. **Verify Mode** (`--verify`): Read and display embedded metadata
@@ -144,6 +146,34 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Preserves embedded metadata through compression via re-embedding
 - Provides compression statistics (original size, compressed size, reduction percentage)
 - Works with all processing modes: --video, --image, --batch, --consolidate
+
+**Frame Extraction Workflow** (`--extract`, v0.6.8+)
+- Extracts specific frames by number from a spritesheet
+- Uses `SpritesheetSplitter` to extract all frames to temp directory
+- Keeps only requested frames, deletes the rest
+- Reassembles frames into new spritesheet using ImageMagick montage
+- Supports duplicate frame numbers for animation loops
+- 1-indexed frame numbering (left-to-right, top-to-bottom)
+- Requires spritesheet metadata (validated during initialization)
+- Supports custom column count (default: 4)
+- Applies processing pipeline (scale, remove-bg, sharpen, compress) to reassembled spritesheet
+- Individual frames temporary unless `--save-frames` specified
+- Automatic output naming with `_extracted` suffix or custom via `--output`
+- Implemented in `Processor#execute_extract_workflow` and `Processor#reassemble_frames`
+- Mutual exclusivity with `--split` (validated in CLI)
+
+**Metadata Addition Workflow** (`--add-meta`, v0.6.8+)
+- Adds spritesheet metadata to external images without embedded metadata
+- Validates image dimensions divide evenly by specified grid
+- Supports partial grids (custom frame count with `--frames`)
+- In-place modification (default) or copy to new file (`--output`)
+- Respects `--overwrite` flag for file protection
+- Can replace existing metadata with `--overwrite-meta`
+- Validates grid layout (rows:columns format, 1-99 range, <1000 total frames)
+- Standalone mode: Cannot combine with `--scale`, `--remove-bg`, `--sharpen`
+- Enables workflow integration: add metadata to external spritesheets, then use `--extract`, `--consolidate`, `--verify`, or `--split`
+- Implemented in `Processor#execute_add_meta_workflow`
+- Uses `MetadataManager.embed` to add metadata
 
 **MetadataManager** (lib/ruby_spriter/metadata_manager.rb)
 - Embeds spritesheet grid info into PNG comment field using ImageMagick

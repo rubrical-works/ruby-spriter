@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.7] - 2025-10-24
 
-### 🚀 Batch Processing, Compression & Directory Consolidation Release
+### 🚀 Batch Processing, Compression, Directory Consolidation & Frame Extraction Release
 
 #### Added
 - **Batch Processing Mode** (`--batch`): Process multiple MP4 files in a directory (Issue #16)
@@ -50,17 +50,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `--override-md` modifier shown under `--split`
     - `--validate-columns` modifier shown under `--consolidate --dir`
   - Organized by function (Image Processing, Output Options) instead of by tool (GIMP Processing Options)
+- **Frame Extraction** (`--extract`): Extract specific frames and create new spritesheet
+  - `--extract FRAMES`: Comma-separated frame numbers (e.g., `1,2,4,5,8`)
+  - `--columns NUM`: Specify output grid columns (default: 4)
+  - Supports duplicate frame numbers for animation sequences
+  - 1-indexed frame numbering (left-to-right, top-to-bottom)
+  - Requires spritesheet metadata (works with `--verify` output)
+  - Works with all `--image` processing options: `--scale`, `--remove-bg`, `--sharpen`, `--max-compress`
+  - Automatic output naming with `_extracted` suffix or custom via `--output`
+  - Temporary frames deleted after reassembly unless `--save-frames` specified
+  - Minimum 2 frames required
+  - Out-of-bounds validation against spritesheet metadata
+  - Mutual exclusivity with `--split`
+- **Metadata Management** (`--add-meta`): Add spritesheet metadata to images without metadata
+  - `--add-meta R:C`: Specify grid layout (rows:columns, e.g., `4:4`)
+  - `--overwrite-meta`: Replace existing metadata
+  - `--frames COUNT`: Custom frame count for partial grids (fewer frames than grid size)
+  - In-place modification by default (respects `--overwrite` flag)
+  - Optional `--output` for copying to new file
+  - Dimension validation: Image dimensions must divide evenly by grid
+  - Enables `--extract`, `--consolidate`, `--verify`, `--split` on external spritesheets
+  - Standalone mode: Cannot combine with `--scale`, `--remove-bg`, `--sharpen`
+- **Enhanced `--save-frames`**: Now works with both `--video` and `--extract`
 - **New Modules**:
   - `BatchProcessor` (lib/ruby_spriter/batch_processor.rb): Orchestrates batch video processing
   - `CompressionManager` (lib/ruby_spriter/compression_manager.rb): Handles PNG compression with metadata preservation
 - **New Public Method**: `Consolidator#find_spritesheets_in_directory(directory)` for directory scanning
-- **Comprehensive Test Coverage**: 46 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 7 for context-sensitive help)
+- **Comprehensive Test Coverage**: 68 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 7 for context-sensitive help, 22 for frame extraction and metadata management)
 
 #### Changed
 - **CLI**: Updated `--consolidate` description to mention `--dir` option
 - **CLI**: Renamed "GIMP Processing Options" to "Processing Options" for tool-agnostic organization
+- **CLI**: Updated image mode help with Frame Extraction & Reassembly section
+- **CLI**: Added Metadata Management section to image mode help
 - **Processor**: Refactored consolidation workflow to support both file list and directory modes
-- **Test Suite**: Increased from 274 to 321 examples (all passing), 78.99% line coverage
+- **Test Suite**: Increased from 274 to 365 examples (all passing), 75.8% line coverage
 - **CLI**: Added parent-child visual hierarchy to all context-sensitive help displays
 - **CLI**: Corrected `--sharpen` to show as standalone option (not under `--scale`)
 
@@ -98,6 +122,28 @@ ruby_spriter --consolidate --dir "spritesheets/" --max-compress
 
 # File list consolidation still works
 ruby_spriter --consolidate file1.png,file2.png,file3.png
+
+# Extract specific frames and create new spritesheet
+ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3
+
+# Extract with duplicates for animation loops
+ruby_spriter --image sprite.png --extract 1,1,2,2,3,3 --save-frames
+
+# Extract and process
+ruby_spriter --image sprite.png --extract 1,3,5,7 --scale 50 --sharpen
+
+# Add metadata to external spritesheet
+ruby_spriter --image sprite.png --add-meta 4:4
+
+# Add metadata with partial grid
+ruby_spriter --image sprite.png --add-meta 4:4 --frames 14 --output sprite_meta.png
+
+# Replace existing metadata
+ruby_spriter --image existing.png --add-meta 8:8 --overwrite-meta
+
+# Workflow: Add metadata, then extract frames
+ruby_spriter --image external.png --add-meta 4:4
+ruby_spriter --image external.png --extract 1,5,9,13 --columns 2
 ```
 
 Closes #14, #16

@@ -1744,5 +1744,149 @@ RSpec.describe RubySpriter::CLI do
         described_class.start(['--image', 'test.png', '--split', '4:4', '--override-md'])
       end
     end
+
+    describe '--extract option' do
+      it 'parses extract option with comma-separated frame numbers' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:extract]).to eq('1,2,4,5,8')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,4,5,8'])
+      end
+
+      it 'allows duplicate frame numbers' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:extract]).to eq('1,1,2,2,3,3')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,1,2,2,3,3'])
+      end
+
+      it 'cannot be used with --split' do
+        expect do
+          described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--split', '4:4'])
+        end.to raise_error(RubySpriter::ValidationError, /--extract and --split are mutually exclusive/)
+      end
+    end
+
+    describe '--columns option' do
+      it 'parses columns option for extraction grid' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:columns]).to eq(3)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--columns', '3'])
+      end
+
+      it 'works without --extract (for future use)' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:columns]).to eq(5)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--columns', '5'])
+      end
+    end
+
+    describe '--save-frames option' do
+      it 'sets save_frames option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:save_frames]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--save-frames'])
+      end
+
+      it 'can be used without --extract' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:save_frames]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--split', '4:4', '--save-frames'])
+      end
+    end
+
+    describe '--add-meta option' do
+      it 'parses add-meta option with R:C format' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:add_meta]).to eq('4:4')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4'])
+      end
+
+      it 'cannot be combined with --scale' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--scale', '50'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+
+      it 'cannot be combined with --remove-bg' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--remove-bg'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+
+      it 'cannot be combined with --sharpen' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--sharpen'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+    end
+
+    describe '--overwrite-meta option' do
+      it 'sets overwrite_meta option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:overwrite_meta]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--overwrite-meta'])
+      end
+    end
+
+    describe '--frames option for partial grids' do
+      it 'parses frames option with integer value' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:frame_count]).to eq(14)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--frames', '14'])
+      end
+    end
   end
 end
