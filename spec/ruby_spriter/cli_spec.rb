@@ -725,13 +725,44 @@ RSpec.describe RubySpriter::CLI do
 
         # Check for child options with hierarchy marker
         expect(output.string).to include('└─ Interpolation:')
-        expect(output.string).to include('└─ Apply unsharp mask')
+        expect(output.string).to include('└─ Sharpen radius')
         expect(output.string).to include('└─ Use fuzzy select')
         expect(output.string).to include('└─ Feather radius')
         expect(output.string).to include('└─ Grow selection')
 
         # Check that --order mentions BOTH requirement
         expect(output.string).to match(/order.*BOTH.*--scale.*AND.*--remove-bg/i)
+      end
+
+      it 'shows --sharpen as standalone option in video mode help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        # --sharpen should be a standalone parent option (not indented under --scale)
+        expect(output.string).to match(/^  --sharpen\s+Apply unsharp mask/)
+
+        # --sharpen modifiers should be children under --sharpen
+        expect(output.string).to include('└─ Sharpen radius')
+        expect(output.string).to include('└─ Sharpen gain')
+        expect(output.string).to include('└─ Sharpen threshold')
+
+        # --interpolation should ONLY be under --scale (not under --sharpen)
+        lines = output.string.lines
+        sharpen_line_idx = lines.index { |l| l.include?('--sharpen') && l.include?('Apply unsharp mask') }
+        scale_line_idx = lines.index { |l| l.include?('--scale PERCENT') }
+        interpolation_line_idx = lines.index { |l| l.include?('└─ Interpolation') }
+
+        # Interpolation should come after scale, not after sharpen
+        expect(interpolation_line_idx).to be > scale_line_idx
+        expect(interpolation_line_idx).to be < sharpen_line_idx
       end
 
       it 'shows image mode help with --help' do

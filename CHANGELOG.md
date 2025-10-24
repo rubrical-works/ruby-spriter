@@ -60,8 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI**: Updated `--consolidate` description to mention `--dir` option
 - **CLI**: Renamed "GIMP Processing Options" to "Processing Options" for tool-agnostic organization
 - **Processor**: Refactored consolidation workflow to support both file list and directory modes
-- **Test Suite**: Increased from 274 to 320 examples (all passing), 78.95% line coverage
+- **Test Suite**: Increased from 274 to 321 examples (all passing), 78.99% line coverage
 - **CLI**: Added parent-child visual hierarchy to all context-sensitive help displays
+- **CLI**: Corrected `--sharpen` to show as standalone option (not under `--scale`)
 
 #### Examples
 ```bash
