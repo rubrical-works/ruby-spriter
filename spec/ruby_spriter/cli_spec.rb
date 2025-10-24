@@ -77,6 +77,21 @@ RSpec.describe RubySpriter::CLI do
           expect { described_class.start(['-h']) }.to output(/Usage: ruby_spriter/).to_stdout
         end.to raise_error(SystemExit)
       end
+
+      it 'shows mode-specific help hints' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Get mode-specific help:')
+      end
     end
 
     describe '--version flag' do
@@ -675,6 +690,141 @@ RSpec.describe RubySpriter::CLI do
 
   describe '--video flag' do
     let(:fixture_video) { File.join(__dir__, '..', 'fixtures', 'test_video.mp4') }
+
+    describe 'context-sensitive help' do
+      it 'shows video mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Video Mode')
+      end
+
+      it 'shows parent-child option hierarchy in video mode help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        # Check for parent options
+        expect(output.string).to include('-s, --scale PERCENT')
+        expect(output.string).to include('-r, --remove-bg')
+
+        # Check for child options with hierarchy marker
+        expect(output.string).to include('└─ Interpolation:')
+        expect(output.string).to include('└─ Sharpen radius')
+        expect(output.string).to include('└─ Use fuzzy select')
+        expect(output.string).to include('└─ Feather radius')
+        expect(output.string).to include('└─ Grow selection')
+
+        # Check that --order mentions BOTH requirement
+        expect(output.string).to match(/order.*BOTH.*--scale.*AND.*--remove-bg/i)
+      end
+
+      it 'shows --sharpen as standalone option in video mode help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        # --sharpen should be a standalone parent option (not indented under --scale)
+        expect(output.string).to match(/^  --sharpen\s+Apply unsharp mask/)
+
+        # --sharpen modifiers should be children under --sharpen
+        expect(output.string).to include('└─ Sharpen radius')
+        expect(output.string).to include('└─ Sharpen gain')
+        expect(output.string).to include('└─ Sharpen threshold')
+
+        # --interpolation should ONLY be under --scale (not under --sharpen)
+        lines = output.string.lines
+        sharpen_line_idx = lines.index { |l| l.include?('--sharpen') && l.include?('Apply unsharp mask') }
+        scale_line_idx = lines.index { |l| l.include?('--scale PERCENT') }
+        interpolation_line_idx = lines.index { |l| l.include?('└─ Interpolation') }
+
+        # Interpolation should come after scale, not after sharpen
+        expect(interpolation_line_idx).to be > scale_line_idx
+        expect(interpolation_line_idx).to be < sharpen_line_idx
+      end
+
+      it 'shows image mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--image', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Image Mode')
+      end
+
+      it 'shows consolidate mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--consolidate', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Consolidate Mode')
+      end
+
+      it 'shows batch mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--batch', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Batch Mode')
+      end
+
+      it 'shows split mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--split', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Split Mode')
+      end
+    end
 
     describe 'argument parsing' do
       it 'sets video option with --video flag' do
@@ -1410,6 +1560,7 @@ RSpec.describe RubySpriter::CLI do
         })
 
         processor = RubySpriter::Processor.new(
+          consolidate_mode: true,
           consolidate: [spritesheet_4x2, spritesheet_6x2],
           overwrite: false
         )
@@ -1441,6 +1592,7 @@ RSpec.describe RubySpriter::CLI do
         })
 
         processor = RubySpriter::Processor.new(
+          consolidate_mode: true,
           consolidate: [spritesheet_4x2, spritesheet_6x2],
           overwrite: true
         )
@@ -1451,6 +1603,97 @@ RSpec.describe RubySpriter::CLI do
 
         # Capture output to suppress console messages
         expect { processor.run }.to output(/SUCCESS/).to_stdout
+      end
+    end
+
+    describe 'directory-based consolidation' do
+      let(:test_dir) { File.join(@test_dir, 'consolidate_dir') }
+
+      before do
+        FileUtils.mkdir_p(test_dir)
+        # Copy fixture spritesheets to test directory
+        FileUtils.cp(spritesheet_4x2, File.join(test_dir, 'sprite1.png'))
+        FileUtils.cp(spritesheet_6x2, File.join(test_dir, 'sprite2.png'))
+      end
+
+      it 'accepts --dir option with --consolidate' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to be_nil
+          expect(options[:dir]).to eq(test_dir)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir])
+      end
+
+      it 'validates directory exists' do
+        expect do
+          described_class.start(['--consolidate', '--dir', 'nonexistent_directory'])
+        end.to raise_error(RubySpriter::ValidationError, /Directory not found/)
+      end
+
+      it 'cannot use --dir with comma-separated file list' do
+        expect do
+          described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--dir', test_dir])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use --dir with comma-separated file list/)
+      end
+
+      it 'works with --output option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:output]).to eq('custom_output.png')
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--output', 'custom_output.png'])
+      end
+
+      it 'works with --outputdir option' do
+        output_dir = File.join(@test_dir, 'output')
+        FileUtils.mkdir_p(output_dir)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:outputdir]).to eq(output_dir)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--outputdir', output_dir])
+      end
+
+      it 'works with --overwrite option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--overwrite'])
+      end
+
+      it 'works with --max-compress option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:max_compress]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--max-compress'])
       end
     end
   end
@@ -1499,6 +1742,150 @@ RSpec.describe RubySpriter::CLI do
         end
 
         described_class.start(['--image', 'test.png', '--split', '4:4', '--override-md'])
+      end
+    end
+
+    describe '--extract option' do
+      it 'parses extract option with comma-separated frame numbers' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:extract]).to eq('1,2,4,5,8')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,4,5,8'])
+      end
+
+      it 'allows duplicate frame numbers' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:extract]).to eq('1,1,2,2,3,3')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,1,2,2,3,3'])
+      end
+
+      it 'cannot be used with --split' do
+        expect do
+          described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--split', '4:4'])
+        end.to raise_error(RubySpriter::ValidationError, /--extract and --split are mutually exclusive/)
+      end
+    end
+
+    describe '--columns option' do
+      it 'parses columns option for extraction grid' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:columns]).to eq(3)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--columns', '3'])
+      end
+
+      it 'works without --extract (for future use)' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:columns]).to eq(5)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--columns', '5'])
+      end
+    end
+
+    describe '--save-frames option' do
+      it 'sets save_frames option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:save_frames]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--extract', '1,2,3', '--save-frames'])
+      end
+
+      it 'can be used without --extract' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:save_frames]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--split', '4:4', '--save-frames'])
+      end
+    end
+
+    describe '--add-meta option' do
+      it 'parses add-meta option with R:C format' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:add_meta]).to eq('4:4')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4'])
+      end
+
+      it 'cannot be combined with --scale' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--scale', '50'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+
+      it 'cannot be combined with --remove-bg' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--remove-bg'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+
+      it 'cannot be combined with --sharpen' do
+        expect do
+          described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--sharpen'])
+        end.to raise_error(RubySpriter::ValidationError, /--add-meta cannot be combined with processing options/)
+      end
+    end
+
+    describe '--overwrite-meta option' do
+      it 'sets overwrite_meta option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:overwrite_meta]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--overwrite-meta'])
+      end
+    end
+
+    describe '--frames option for partial grids' do
+      it 'parses frames option with integer value' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:frame_count]).to eq(14)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--frames', '14'])
       end
     end
   end

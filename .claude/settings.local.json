@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bundle exec rspec:*)",
+      "Bash(git push:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(git tag:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ruby -e:*)",
+      "Bash(ruby bin/ruby_spriter:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

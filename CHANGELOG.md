@@ -12,6 +12,144 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.7] - 2025-10-24
+
+### 🚀 Batch Processing, Compression, Directory Consolidation & Frame Extraction Release
+
+#### Added
+- **Batch Processing Mode** (`--batch`): Process multiple MP4 files in a directory (Issue #16)
+  - `--dir DIRECTORY`: Specify directory containing MP4 files to process
+  - `--outputdir DIRECTORY`: Optional output directory (defaults to input directory)
+  - `--batch-consolidate`: Automatically consolidate all resulting spritesheets
+  - Supports all existing processing options: `--scale`, `--remove-bg`, `--sharpen`, `--interpolation`, etc.
+  - Enforces unique filenames unless `--overwrite` is specified
+  - Continues processing remaining videos if one fails
+  - Provides detailed summary of successes and failures
+- **Maximum Compression** (`--max-compress`): Apply maximum PNG compression (Issue #14)
+  - Uses ImageMagick with optimal compression settings (level 9, filter 5, strategy 1, quality 95)
+  - Preserves embedded metadata through compression
+  - Works with all processing modes: `--video`, `--image`, `--batch`, `--consolidate`
+  - Displays compression statistics (original size, compressed size, savings, reduction percentage)
+- **Directory-Based Consolidation**: `--consolidate` now supports `--dir` option to automatically consolidate all spritesheets in a directory
+  - Scans directory for PNG files with embedded spritesheet metadata
+  - Automatically filters out non-spritesheet PNG files
+  - Sorts files alphabetically by filename before consolidation
+  - Requires at least 2 valid spritesheets in directory
+  - Works with all existing consolidation options: `--output`, `--outputdir`, `--overwrite`, `--max-compress`, `--no-validate-columns`
+  - Mutual exclusivity validation: Cannot use both comma-separated file list and `--dir` with `--consolidate`
+- **Enhanced Context-Sensitive Help System**: Mode-specific help displays only relevant options
+  - `ruby_spriter --video --help`: Shows video mode options (spritesheet generation, processing, output)
+  - `ruby_spriter --image --help`: Shows image mode options (processing, frame extraction, output)
+  - `ruby_spriter --consolidate --help`: Shows consolidation options (input methods, validation, output)
+  - `ruby_spriter --batch --help`: Shows batch processing options (directory processing, applied options)
+  - `ruby_spriter --split --help`: Shows frame extraction options (split format, metadata behavior, output)
+  - General `--help`: Shows mode-specific help hints and directs users to detailed help
+  - **Parent-Child Option Hierarchy**: Visual hierarchy (└─) shows modifier options grouped under parent options
+    - `--interpolation`, `--sharpen*` modifiers shown under `--scale`
+    - `--fuzzy`, `--threshold`, `--grow` modifiers shown under `--remove-bg`
+    - `--override-md` modifier shown under `--split`
+    - `--validate-columns` modifier shown under `--consolidate --dir`
+  - Organized by function (Image Processing, Output Options) instead of by tool (GIMP Processing Options)
+- **Frame Extraction** (`--extract`): Extract specific frames and create new spritesheet
+  - `--extract FRAMES`: Comma-separated frame numbers (e.g., `1,2,4,5,8`)
+  - `--columns NUM`: Specify output grid columns (default: 4)
+  - Supports duplicate frame numbers for animation sequences
+  - 1-indexed frame numbering (left-to-right, top-to-bottom)
+  - Requires spritesheet metadata (works with `--verify` output)
+  - Works with all `--image` processing options: `--scale`, `--remove-bg`, `--sharpen`, `--max-compress`
+  - Automatic output naming with `_extracted` suffix or custom via `--output`
+  - Temporary frames deleted after reassembly unless `--save-frames` specified
+  - Minimum 2 frames required
+  - Out-of-bounds validation against spritesheet metadata
+  - Mutual exclusivity with `--split`
+- **Metadata Management** (`--add-meta`): Add spritesheet metadata to images without metadata
+  - `--add-meta R:C`: Specify grid layout (rows:columns, e.g., `4:4`)
+  - `--overwrite-meta`: Replace existing metadata
+  - `--frames COUNT`: Custom frame count for partial grids (fewer frames than grid size)
+  - In-place modification by default (respects `--overwrite` flag)
+  - Optional `--output` for copying to new file
+  - Dimension validation: Image dimensions must divide evenly by grid
+  - Enables `--extract`, `--consolidate`, `--verify`, `--split` on external spritesheets
+  - Standalone mode: Cannot combine with `--scale`, `--remove-bg`, `--sharpen`
+- **Enhanced `--save-frames`**: Now works with both `--video` and `--extract`
+- **New Modules**:
+  - `BatchProcessor` (lib/ruby_spriter/batch_processor.rb): Orchestrates batch video processing
+  - `CompressionManager` (lib/ruby_spriter/compression_manager.rb): Handles PNG compression with metadata preservation
+- **New Public Method**: `Consolidator#find_spritesheets_in_directory(directory)` for directory scanning
+- **Comprehensive Test Coverage**: 68 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 7 for context-sensitive help, 22 for frame extraction and metadata management)
+
+#### Changed
+- **CLI**: Updated `--consolidate` description to mention `--dir` option
+- **CLI**: Renamed "GIMP Processing Options" to "Processing Options" for tool-agnostic organization
+- **CLI**: Updated image mode help with Frame Extraction & Reassembly section
+- **CLI**: Added Metadata Management section to image mode help
+- **Processor**: Refactored consolidation workflow to support both file list and directory modes
+- **Test Suite**: Increased from 274 to 365 examples (all passing), 75.8% line coverage
+- **CLI**: Added parent-child visual hierarchy to all context-sensitive help displays
+- **CLI**: Corrected `--sharpen` to show as standalone option (not under `--scale`)
+
+#### Examples
+```bash
+# Get context-sensitive help for specific modes
+ruby_spriter --video --help
+ruby_spriter --image --help
+ruby_spriter --consolidate --help
+ruby_spriter --batch --help
+ruby_spriter --split --help
+
+# Process all videos in directory
+ruby_spriter --batch --dir "videos/"
+
+# Process with output to different directory
+ruby_spriter --batch --dir "videos/" --outputdir "output/"
+
+# Process and consolidate all results
+ruby_spriter --batch --dir "videos/" --batch-consolidate
+
+# Process with scaling and compression
+ruby_spriter --batch --dir "videos/" --scale 50 --max-compress
+
+# Compress video output
+ruby_spriter --video "input.mp4" --max-compress
+
+# Compress image processing output
+ruby_spriter --image "sprite.png" --scale 50 --max-compress
+
+# Directory-based consolidation
+ruby_spriter --consolidate --dir "spritesheets/"
+ruby_spriter --consolidate --dir "spritesheets/" --outputdir "output/"
+ruby_spriter --consolidate --dir "spritesheets/" --max-compress
+
+# File list consolidation still works
+ruby_spriter --consolidate file1.png,file2.png,file3.png
+
+# Extract specific frames and create new spritesheet
+ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3
+
+# Extract with duplicates for animation loops
+ruby_spriter --image sprite.png --extract 1,1,2,2,3,3 --save-frames
+
+# Extract and process
+ruby_spriter --image sprite.png --extract 1,3,5,7 --scale 50 --sharpen
+
+# Add metadata to external spritesheet
+ruby_spriter --image sprite.png --add-meta 4:4
+
+# Add metadata with partial grid
+ruby_spriter --image sprite.png --add-meta 4:4 --frames 14 --output sprite_meta.png
+
+# Replace existing metadata
+ruby_spriter --image existing.png --add-meta 8:8 --overwrite-meta
+
+# Workflow: Add metadata, then extract frames
+ruby_spriter --image external.png --add-meta 4:4
+ruby_spriter --image external.png --extract 1,5,9,13 --columns 2
+```
+
+Closes #14, #16
+
+---
+
 ## [0.6.6] - 2025-10-23
 
 ### 🔒 File Protection & Frame Extraction Release

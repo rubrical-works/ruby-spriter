@@ -27,6 +27,8 @@ module RubySpriter
       @gimp_path = nil
       validate_numeric_options!
       validate_split_option!
+      validate_extract_option!
+      validate_add_meta_option!
     end
 
     # Run the processing workflow
@@ -74,24 +76,51 @@ module RubySpriter
         overwrite: false,
         save_frames: false,
         split: nil,
-        override_md: false
+        override_md: false,
+        extract: nil,
+        add_meta: nil,
+        overwrite_meta: false
       }
     end
 
     def validate_options!
-      input_modes = [options[:video], options[:image], options[:consolidate], options[:verify]].compact
+      input_modes = [options[:video], options[:image], options[:consolidate_mode], options[:verify], options[:batch]].compact
 
       if input_modes.empty?
-        raise ValidationError, "Must specify --video, --image, --consolidate, or --verify"
+        raise ValidationError, "Must specify --video, --image, --consolidate, --verify, or --batch"
       end
 
       if input_modes.length > 1
         raise ValidationError, "Cannot use multiple input modes together. Choose one."
       end
 
+      validate_consolidate_options!
       validate_input_files!
       validate_numeric_options!
       validate_split_option!
+      validate_extract_option!
+      validate_add_meta_option!
+    end
+
+    def validate_consolidate_options!
+      return unless options[:consolidate_mode]
+
+      # Check for mutual exclusivity between file list and directory
+      if options[:consolidate] && options[:dir]
+        raise ValidationError, "Cannot use --dir with comma-separated file list for --consolidate. Choose one method."
+      end
+
+      # Require either file list or directory
+      unless options[:consolidate] || options[:dir]
+        raise ValidationError, "--consolidate requires either comma-separated files or --dir option"
+      end
+
+      # Validate directory if using directory mode
+      if options[:dir] && !options[:consolidate]
+        unless File.directory?(options[:dir])
+          raise ValidationError, "Directory not found: #{options[:dir]}"
+        end
+      end
     end
 
     def validate_input_files!
@@ -177,6 +206,119 @@ module RubySpriter
       @split_columns = columns
     end
 
+    def validate_extract_option!
+      return unless options[:extract]
+
+      # Parse extract format: comma-separated integers (allow negatives for better error messages)
+      unless options[:extract] =~ /^-?\d+(,-?\d+)*$/
+        raise ValidationError, "Invalid --extract format. Use comma-separated frame numbers (e.g., 1,2,4,5,8)"
+      end
+
+      # Parse frame numbers
+      frame_numbers = options[:extract].split(',').map(&:to_i)
+
+      # Validate minimum 2 frames
+      if frame_numbers.length < 2
+        raise ValidationError, "--extract requires at least 2 frames, got: #{frame_numbers.length}"
+      end
+
+      # Validate frame numbers are 1-indexed (no 0 or negative)
+      invalid_frames = frame_numbers.select { |n| n <= 0 }
+      if invalid_frames.any?
+        raise ValidationError, "Frame numbers must be 1-indexed (positive integers), got invalid: #{invalid_frames.join(', ')}"
+      end
+
+      # Check for metadata (required for extraction)
+      return unless options[:image] # Only validate bounds if we have an image path
+
+      image_file = options[:image]
+      metadata = MetadataManager.read(image_file)
+
+      unless metadata
+        raise ValidationError, "Image has no metadata. Cannot extract frames without knowing the grid layout. Use --add-meta first."
+      end
+
+      # Validate frame numbers are within bounds
+      total_frames = metadata[:frames]
+      out_of_bounds = frame_numbers.select { |n| n > total_frames }
+      if out_of_bounds.any?
+        first_oob = out_of_bounds.first
+        raise ValidationError, "Frame #{first_oob} is out of bounds (image only has #{total_frames} frames)"
+      end
+
+      # Set default columns if not specified
+      options[:columns] ||= 4
+    end
+
+    def validate_add_meta_option!
+      return unless options[:add_meta]
+
+      # Parse add-meta format: R:C
+      unless options[:add_meta] =~ /^\d+:\d+$/
+        raise ValidationError, "Invalid --add-meta format. Use R:C (e.g., 4:4)"
+      end
+
+      rows, columns = options[:add_meta].split(':').map(&:to_i)
+
+      # Validate ranges
+      if rows < 1 || rows > 99
+        raise ValidationError, "rows must be between 1 and 99, got: #{rows}"
+      end
+
+      if columns < 1 || columns > 99
+        raise ValidationError, "columns must be between 1 and 99, got: #{columns}"
+      end
+
+      # Validate total frames < 1000
+      total_frames = rows * columns
+      if total_frames >= 1000
+        raise ValidationError, "Total frames (#{total_frames}) must be less than 1000"
+      end
+
+      # Check if we need to validate against image file
+      return unless options[:image]
+
+      image_file = options[:image]
+      metadata = MetadataManager.read(image_file)
+
+      # Check for existing metadata
+      if metadata && !options[:overwrite_meta]
+        raise ValidationError, "Image already has spritesheet metadata. Use --overwrite-meta to replace it."
+      end
+
+      # Validate image dimensions divide evenly by grid
+      dimensions = get_image_dimensions(image_file)
+      tile_width = dimensions[:width] / columns.to_f
+      tile_height = dimensions[:height] / rows.to_f
+
+      unless tile_width == tile_width.to_i && tile_height == tile_height.to_i
+        raise ValidationError, "Image dimensions (#{dimensions[:width]}x#{dimensions[:height]}) must divide evenly by grid (#{rows}x#{columns}). Expected frame size: #{tile_width}x#{tile_height}"
+      end
+
+      # Validate custom frame count doesn't exceed grid size
+      if options[:frame_count] && options[:frame_count] > total_frames
+        raise ValidationError, "Frame count (#{options[:frame_count]}) exceeds grid size (#{total_frames})"
+      end
+    end
+
+    def get_image_dimensions(image_file)
+      cmd = [
+        'magick',
+        'identify',
+        '-format', '%wx%h',
+        Utils::PathHelper.quote_path(image_file)
+      ].join(' ')
+
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Could not get image dimensions: #{stderr}"
+      end
+
+      width, height = stdout.strip.split('x').map(&:to_i)
+      { width: width, height: height }
+    end
+
     def check_dependencies!
       checker = DependencyChecker.new(verbose: options[:debug])
       results = checker.check_all
@@ -231,7 +373,9 @@ module RubySpriter
         return { mode: :verify, file: options[:verify] }
       end
 
-      if options[:consolidate]
+      if options[:batch]
+        return execute_batch_workflow
+      elsif options[:consolidate_mode]
         return execute_consolidate_workflow
       elsif options[:image]
         return execute_image_workflow
@@ -277,7 +421,12 @@ module RubySpriter
       # Step 5: Clean up intermediate files
       cleanup_intermediate_files(intermediate_files)
 
-      # Step 6: Extract individual frames if requested
+      # Step 6: Apply max compression if requested
+      if options[:max_compress]
+        working_file = apply_max_compression(working_file)
+      end
+
+      # Step 7: Extract individual frames if requested
       if options[:save_frames]
         split_frames_from_spritesheet(working_file, result[:columns], result[:rows], result[:frames])
       end
@@ -291,6 +440,16 @@ module RubySpriter
     def execute_image_workflow
       working_file = options[:image]
       intermediate_files = []
+
+      # Handle metadata addition workflow first
+      if options[:add_meta]
+        return execute_add_meta_workflow
+      end
+
+      # Handle frame extraction workflow
+      if options[:extract]
+        return execute_extract_workflow
+      end
 
       # Apply GIMP processing if requested (GimpProcessor handles uniqueness)
       if needs_gimp?
@@ -317,6 +476,11 @@ module RubySpriter
       # Clean up intermediate files
       cleanup_intermediate_files(intermediate_files)
 
+      # Apply max compression if requested
+      if options[:max_compress]
+        working_file = apply_max_compression(working_file)
+      end
+
       # Determine if we should split the image into frames
       should_split = options[:save_frames] || options[:split]
 
@@ -338,18 +502,204 @@ module RubySpriter
       }
     end
 
+    def execute_extract_workflow
+      input_file = options[:image]
+      metadata = MetadataManager.read(input_file)
+      frame_numbers = options[:extract].split(',').map(&:to_i)
+      columns = options[:columns]
+
+      Utils::OutputFormatter.header("Frame Extraction")
+      Utils::OutputFormatter.indent("Input: #{input_file}")
+      Utils::OutputFormatter.indent("Frames to extract: #{frame_numbers.join(', ')}")
+      Utils::OutputFormatter.indent("Output columns: #{columns}")
+
+      # Step 1: Extract all frames to temp directory
+      temp_frames_dir = File.join(options[:temp_dir], 'extracted_frames')
+      splitter = Utils::SpritesheetSplitter.new
+      splitter.split_into_frames(input_file, temp_frames_dir, metadata[:columns], metadata[:rows], metadata[:frames])
+
+      # Step 2: Keep only requested frames, delete the rest
+      spritesheet_basename = File.basename(input_file, '.*')
+      all_frame_files = Dir.glob(File.join(temp_frames_dir, "FR*_#{spritesheet_basename}.png")).sort
+      requested_frame_files = frame_numbers.map do |frame_num|
+        # Frame files are named FR001, FR002, etc. (1-indexed)
+        File.join(temp_frames_dir, "FR#{format('%03d', frame_num)}_#{spritesheet_basename}.png")
+      end
+
+      # Delete unwanted frames
+      (all_frame_files - requested_frame_files).each { |f| FileUtils.rm_f(f) }
+
+      Utils::OutputFormatter.indent("Kept #{requested_frame_files.length} frames, deleted #{all_frame_files.length - requested_frame_files.length} frames")
+
+      # Step 3: Reassemble into new spritesheet
+      Utils::OutputFormatter.header("Reassembling Spritesheet")
+      reassembled_file = File.join(options[:temp_dir], "reassembled_#{spritesheet_basename}.png")
+      reassemble_frames(requested_frame_files, reassembled_file, columns)
+
+      working_file = reassembled_file
+      intermediate_files = []
+
+      # Step 4: Apply GIMP processing if requested
+      if needs_gimp?
+        initial_file = working_file
+        working_file = process_with_gimp(working_file)
+
+        if working_file != initial_file
+          intermediate_files = collect_intermediate_files(initial_file, working_file)
+        end
+      end
+
+      # Step 5: Determine final output filename
+      if options[:output]
+        final_output = Utils::FileHelper.ensure_unique_output(options[:output], overwrite: options[:overwrite])
+      else
+        # Auto-generate output filename with _extracted suffix
+        base = File.basename(input_file, '.*')
+        ext = File.extname(input_file)
+        desired_output = File.join(File.dirname(input_file), "#{base}_extracted#{ext}")
+        final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
+      end
+
+      # Step 6: Copy to final output
+      FileUtils.cp(working_file, final_output)
+      working_file = final_output
+
+      # Step 7: Clean up intermediate files
+      cleanup_intermediate_files(intermediate_files)
+
+      # Step 8: Apply max compression if requested
+      if options[:max_compress]
+        working_file = apply_max_compression(working_file)
+      end
+
+      # Step 9: Optionally save individual frames
+      if options[:save_frames]
+        frames_output_dir = File.join(File.dirname(working_file), "#{File.basename(working_file, '.*')}_frames")
+        FileUtils.mkdir_p(frames_output_dir)
+        requested_frame_files.each_with_index do |frame_file, idx|
+          frame_num = frame_numbers[idx]
+          dest = File.join(frames_output_dir, "FR#{format('%03d', frame_num)}_#{spritesheet_basename}.png")
+          FileUtils.cp(frame_file, dest)
+        end
+        Utils::OutputFormatter.indent("Saved #{requested_frame_files.length} frames to: #{frames_output_dir}")
+      end
+
+      Utils::OutputFormatter.header("SUCCESS!")
+      Utils::OutputFormatter.success("Extracted spritesheet: #{working_file}")
+
+      {
+        mode: :extract,
+        input_file: input_file,
+        output_file: working_file,
+        frames_extracted: frame_numbers.length,
+        columns: columns
+      }
+    end
+
+    def execute_add_meta_workflow
+      input_file = options[:image]
+      rows, columns = options[:add_meta].split(':').map(&:to_i)
+
+      # Determine frame count
+      frame_count = if options[:frame_count]
+                      options[:frame_count]
+                    else
+                      rows * columns
+                    end
+
+      Utils::OutputFormatter.header("Adding Metadata")
+      Utils::OutputFormatter.indent("Input: #{input_file}")
+      Utils::OutputFormatter.indent("Grid: #{rows}×#{columns} (#{frame_count} frames)")
+
+      # Determine output file
+      if options[:output]
+        # User specified explicit output
+        output_file = Utils::FileHelper.ensure_unique_output(options[:output], overwrite: options[:overwrite])
+
+        # Copy input to output
+        FileUtils.cp(input_file, output_file)
+        Utils::OutputFormatter.indent("Copied to: #{output_file}")
+      else
+        # In-place modification
+        if options[:overwrite]
+          output_file = input_file
+          Utils::OutputFormatter.indent("Modifying in-place (--overwrite specified)")
+        else
+          # Create unique filename
+          output_file = Utils::FileHelper.ensure_unique_output(input_file, overwrite: false)
+          FileUtils.cp(input_file, output_file)
+          Utils::OutputFormatter.indent("Created: #{output_file}")
+        end
+      end
+
+      # Embed metadata
+      MetadataManager.embed(output_file, columns, rows, frame_count)
+      Utils::OutputFormatter.indent("📝 Metadata embedded: #{columns}×#{rows} grid (#{frame_count} frames)")
+
+      Utils::OutputFormatter.header("SUCCESS!")
+      Utils::OutputFormatter.success("Metadata added to: #{output_file}")
+
+      {
+        mode: :add_meta,
+        input_file: input_file,
+        output_file: output_file,
+        columns: columns,
+        rows: rows,
+        frames: frame_count
+      }
+    end
+
     def execute_consolidate_workflow
       consolidator = Consolidator.new(options)
 
-      desired_output = options[:output] || generate_consolidated_filename
+      # Determine file list: either from command line or from directory
+      files_to_consolidate = if options[:dir] && !options[:consolidate]
+                               # Directory-based consolidation
+                               consolidator.find_spritesheets_in_directory(options[:dir])
+                             else
+                               # File list consolidation
+                               options[:consolidate]
+                             end
+
+      # Determine output filename and directory
+      if options[:dir] && !options[:consolidate]
+        # Directory mode: output to dir or outputdir
+        output_dir = options[:outputdir] || options[:dir]
+        desired_output = if options[:output]
+                           File.join(output_dir, File.basename(options[:output]))
+                         else
+                           File.join(output_dir, generate_consolidated_filename)
+                         end
+      else
+        # File list mode: use current directory behavior
+        if options[:outputdir]
+          desired_output = File.join(options[:outputdir], options[:output] || generate_consolidated_filename)
+        else
+          desired_output = options[:output] || generate_consolidated_filename
+        end
+      end
+
       final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
-      result = consolidator.consolidate(options[:consolidate], final_output)
+      result = consolidator.consolidate(files_to_consolidate, final_output)
+
+      # Apply max compression if requested
+      if options[:max_compress]
+        final_output = apply_max_compression(result[:output_file])
+        result[:output_file] = final_output
+      end
 
       Utils::OutputFormatter.header("SUCCESS!")
       Utils::OutputFormatter.success("Final output: #{result[:output_file]}")
 
       result.merge(mode: :consolidate)
+    end
+
+    def execute_batch_workflow
+      batch_processor = BatchProcessor.new(options)
+      result = batch_processor.process
+
+      result.merge(mode: :batch)
     end
 
     def process_with_gimp(input_file)
@@ -369,6 +719,38 @@ module RubySpriter
       # Split the spritesheet into individual frames
       splitter = Utils::SpritesheetSplitter.new
       splitter.split_into_frames(spritesheet_file, frames_dir, columns, rows, frames)
+    end
+
+    def reassemble_frames(frame_files, output_file, columns)
+      # Calculate rows needed for the specified columns
+      total_frames = frame_files.length
+      rows = (total_frames.to_f / columns).ceil
+
+      Utils::OutputFormatter.indent("Layout: #{columns}×#{rows} grid (#{total_frames} frames)")
+
+      # Use ImageMagick montage to create spritesheet
+      # Montage arranges images in a grid
+      cmd = [
+        'magick',
+        'montage',
+        frame_files.map { |f| Utils::PathHelper.quote_path(f) }.join(' '),
+        '-tile', "#{columns}x#{rows}",
+        '-geometry', '+0+0',  # No spacing between tiles
+        '-background', 'none',  # Transparent background
+        Utils::PathHelper.quote_path(output_file)
+      ].join(' ')
+
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Failed to reassemble frames: #{stderr}"
+      end
+
+      # Embed metadata in the reassembled spritesheet
+      MetadataManager.embed(output_file, columns, rows, total_frames)
+
+      Utils::OutputFormatter.indent("✅ Reassembled into #{columns}×#{rows} spritesheet")
+      Utils::OutputFormatter.indent("📝 Metadata embedded: #{columns}×#{rows} grid (#{total_frames} frames)")
     end
 
     def collect_intermediate_files(initial_file, final_file)
@@ -476,6 +858,29 @@ module RubySpriter
       unless height % rows == 0
         raise ValidationError, "Image height (#{height}) not evenly divisible by #{rows} rows"
       end
+    end
+
+    def apply_max_compression(file)
+      Utils::OutputFormatter.note("Applying maximum compression...")
+
+      original_size = File.size(file)
+      temp_file = file.gsub('.png', '_compressed_temp.png')
+
+      CompressionManager.compress_with_metadata(file, temp_file, debug: options[:debug])
+
+      # Show compression stats
+      stats = CompressionManager.compression_stats(file, temp_file)
+
+      if options[:debug] || stats[:saved_bytes] > 0
+        Utils::OutputFormatter.indent("Original: #{Utils::FileHelper.format_size(stats[:original_size])}")
+        Utils::OutputFormatter.indent("Compressed: #{Utils::FileHelper.format_size(stats[:compressed_size])}")
+        Utils::OutputFormatter.indent("Saved: #{Utils::FileHelper.format_size(stats[:saved_bytes])} (#{stats[:reduction_percent].round(1)}% reduction)")
+      end
+
+      # Replace original with compressed
+      FileUtils.mv(temp_file, file)
+
+      file
     end
   end
 end

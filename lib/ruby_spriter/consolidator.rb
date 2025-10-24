@@ -58,6 +58,39 @@ module RubySpriter
       }
     end
 
+    # Find all PNG files with spritesheet metadata in a directory
+    # @param directory [String] Directory path to scan
+    # @return [Array<String>] Sorted array of spritesheet file paths
+    def find_spritesheets_in_directory(directory)
+      # Validate directory exists
+      unless File.directory?(directory)
+        raise ValidationError, "Directory not found: #{directory}"
+      end
+
+      # Find all PNG files
+      pattern = File.join(directory, '*.png')
+      png_files = Dir.glob(pattern)
+
+      # Filter to only files with metadata
+      spritesheets = png_files.select do |file|
+        metadata = MetadataManager.read(file)
+        !metadata.nil?
+      end
+
+      # Validate we found at least one
+      if spritesheets.empty?
+        raise ValidationError, "No PNG files with spritesheet metadata found in directory: #{directory}"
+      end
+
+      # Validate we have at least 2
+      if spritesheets.length < 2
+        raise ValidationError, "Found only #{spritesheets.length} spritesheet, need at least 2 for consolidation"
+      end
+
+      # Sort alphabetically by filename
+      spritesheets.sort
+    end
+
     private
 
     def validate_files!(files)
