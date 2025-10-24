@@ -388,29 +388,53 @@ RSpec.describe RubySpriter::Consolidator do
     it 'finds all PNG files with metadata in directory' do
       test_dir = create_test_dir
       # Copy spritesheets with metadata to test directory
-      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
-      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
+      sprite1_path = File.join(test_dir, 'sprite1.png')
+      sprite2_path = File.join(test_dir, 'sprite2.png')
+      FileUtils.cp(spritesheet1, sprite1_path)
+      FileUtils.cp(spritesheet2, sprite2_path)
+
+      # Mock metadata reading to return valid metadata for these files
+      allow(RubySpriter::MetadataManager).to receive(:read).and_call_original
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite1_path).and_return(
+        { columns: 2, rows: 2, frames: 4, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite2_path).and_return(
+        { columns: 2, rows: 3, frames: 6, version: '0.6' }
+      )
 
       found_files = consolidator.find_spritesheets_in_directory(test_dir)
 
       expect(found_files.length).to eq(2)
-      expect(found_files).to include(File.join(test_dir, 'sprite1.png'))
-      expect(found_files).to include(File.join(test_dir, 'sprite2.png'))
+      expect(found_files).to include(sprite1_path)
+      expect(found_files).to include(sprite2_path)
     end
 
     it 'excludes PNG files without metadata' do
       test_dir = create_test_dir
       # Copy two spritesheets with metadata and one image without
-      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
-      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
-      FileUtils.cp(image_without_meta, File.join(test_dir, 'no_meta.png'))
+      sprite1_path = File.join(test_dir, 'sprite1.png')
+      sprite2_path = File.join(test_dir, 'sprite2.png')
+      no_meta_path = File.join(test_dir, 'no_meta.png')
+      FileUtils.cp(spritesheet1, sprite1_path)
+      FileUtils.cp(spritesheet2, sprite2_path)
+      FileUtils.cp(image_without_meta, no_meta_path)
+
+      # Mock metadata reading
+      allow(RubySpriter::MetadataManager).to receive(:read).and_call_original
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite1_path).and_return(
+        { columns: 2, rows: 2, frames: 4, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(sprite2_path).and_return(
+        { columns: 2, rows: 3, frames: 6, version: '0.6' }
+      )
+      allow(RubySpriter::MetadataManager).to receive(:read).with(no_meta_path).and_return(nil)
 
       found_files = consolidator.find_spritesheets_in_directory(test_dir)
 
       expect(found_files.length).to eq(2)
-      expect(found_files).to include(File.join(test_dir, 'sprite1.png'))
-      expect(found_files).to include(File.join(test_dir, 'sprite2.png'))
-      expect(found_files).not_to include(File.join(test_dir, 'no_meta.png'))
+      expect(found_files).to include(sprite1_path)
+      expect(found_files).to include(sprite2_path)
+      expect(found_files).not_to include(no_meta_path)
     end
 
     it 'returns files sorted alphabetically' do

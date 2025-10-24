@@ -18,8 +18,10 @@ RSpec.describe RubySpriter::CompressionManager do
 
   describe '.compress' do
     it 'compresses PNG file using ImageMagick' do
+      magick_cmd = RubySpriter::Platform.imagemagick_convert_cmd
+
       expect(Open3).to receive(:capture3) do |cmd|
-        expect(cmd).to include('magick')
+        expect(cmd).to include(magick_cmd.split.first)  # Check for 'convert' or 'magick'
         expect(cmd).to include(input_file)
         expect(cmd).to include(output_file)
         expect(cmd).to include('-strip')
