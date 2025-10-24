@@ -63,7 +63,7 @@ module RubySpriter
 
     def add_header(opts)
       opts.separator ""
-      opts.separator "Ruby Spriter v#{VERSION} - MP4 to Spritesheet + GIMP Processing"
+      opts.separator "Ruby Spriter v#{VERSION} - Professional MP4 to Spritesheet Converter with Advanced Image Processing"
       opts.separator "Platform: #{Platform.current.to_s.capitalize}"
       opts.separator ""
       opts.separator "Get mode-specific help:"
@@ -180,7 +180,7 @@ module RubySpriter
         options[:sharpen_threshold] = t
       end
 
-      opts.on("-r", "--remove-bg", "Remove background from spritesheet using GIMP") do
+      opts.on("-r", "--remove-bg", "Remove background from spritesheet") do
         options[:remove_bg] = true
       end
 
@@ -324,7 +324,7 @@ module RubySpriter
       puts "Video Mode"
       puts "=" * 60
       puts ""
-      puts "Convert MP4 video files to spritesheets with optional GIMP processing."
+      puts "Convert MP4 videos to spritesheets with advanced image processing."
       puts ""
       puts "Basic Usage:"
       puts "  ruby_spriter --video FILE [options]"
@@ -348,7 +348,7 @@ module RubySpriter
       puts "    --sharpen-gain VALUE           └─ Sharpen gain/strength (default: 0.5)"
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
-      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -r, --remove-bg                  Remove background"
       puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
       puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
@@ -377,7 +377,7 @@ module RubySpriter
       puts "Image Mode"
       puts "=" * 60
       puts ""
-      puts "Process existing PNG spritesheets with GIMP operations."
+      puts "Process PNG spritesheets with advanced image operations."
       puts ""
       puts "Basic Usage:"
       puts "  ruby_spriter --image FILE [options]"
@@ -393,7 +393,7 @@ module RubySpriter
       puts "    --sharpen-gain VALUE           └─ Sharpen gain/strength (default: 0.5)"
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
-      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -r, --remove-bg                  Remove background"
       puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
       puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
@@ -493,7 +493,7 @@ module RubySpriter
       puts "    --sharpen-gain VALUE           └─ Sharpen gain (default: 0.5)"
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
-      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -r, --remove-bg                  Remove background"
       puts "    --fuzzy                        └─ Use fuzzy select (DEFAULT)"
       puts "    --no-fuzzy                     └─ Use global color select"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
