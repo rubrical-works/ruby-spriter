@@ -12,6 +12,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.8] - 2025-10-24
+
+### 🎯 Directory-Based Consolidation Release
+
+#### Added
+- **Directory-Based Consolidation**: `--consolidate` now supports `--dir` option to automatically consolidate all spritesheets in a directory
+  - Scans directory for PNG files with embedded spritesheet metadata
+  - Automatically filters out non-spritesheet PNG files
+  - Sorts files alphabetically by filename before consolidation
+  - Requires at least 2 valid spritesheets in directory
+  - Works with all existing consolidation options: `--output`, `--outputdir`, `--overwrite`, `--max-compress`, `--no-validate-columns`
+- **Mutual Exclusivity Validation**: Cannot use both comma-separated file list and `--dir` with `--consolidate`
+- **New Public Method**: `Consolidator#find_spritesheets_in_directory(directory)` for directory scanning
+
+#### Changed
+- **CLI**: Updated `--consolidate` description to mention `--dir` option
+- **Processor**: Refactored consolidation workflow to support both file list and directory modes
+- **Test Suite**: Increased from 298 to 313 examples (all passing), 74.29% line coverage
+
+#### Examples
+```bash
+# Directory-based consolidation (new feature)
+ruby_spriter --consolidate --dir "spritesheets/"
+ruby_spriter --consolidate --dir "spritesheets/" --outputdir "output/"
+ruby_spriter --consolidate --dir "spritesheets/" --max-compress
+
+# File list consolidation (existing, still works)
+ruby_spriter --consolidate file1.png,file2.png,file3.png
+
+# Invalid: cannot mix both modes
+ruby_spriter --consolidate file1.png,file2.png --dir "spritesheets/"  # ERROR
+```
+
+---
+
 ## [0.6.7] - 2025-10-24
 
 ### 🚀 Batch Processing & Compression Release

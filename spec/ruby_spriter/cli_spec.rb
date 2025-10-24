@@ -1410,6 +1410,7 @@ RSpec.describe RubySpriter::CLI do
         })
 
         processor = RubySpriter::Processor.new(
+          consolidate_mode: true,
           consolidate: [spritesheet_4x2, spritesheet_6x2],
           overwrite: false
         )
@@ -1441,6 +1442,7 @@ RSpec.describe RubySpriter::CLI do
         })
 
         processor = RubySpriter::Processor.new(
+          consolidate_mode: true,
           consolidate: [spritesheet_4x2, spritesheet_6x2],
           overwrite: true
         )
@@ -1451,6 +1453,97 @@ RSpec.describe RubySpriter::CLI do
 
         # Capture output to suppress console messages
         expect { processor.run }.to output(/SUCCESS/).to_stdout
+      end
+    end
+
+    describe 'directory-based consolidation' do
+      let(:test_dir) { File.join(@test_dir, 'consolidate_dir') }
+
+      before do
+        FileUtils.mkdir_p(test_dir)
+        # Copy fixture spritesheets to test directory
+        FileUtils.cp(spritesheet_4x2, File.join(test_dir, 'sprite1.png'))
+        FileUtils.cp(spritesheet_6x2, File.join(test_dir, 'sprite2.png'))
+      end
+
+      it 'accepts --dir option with --consolidate' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to be_nil
+          expect(options[:dir]).to eq(test_dir)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir])
+      end
+
+      it 'validates directory exists' do
+        expect do
+          described_class.start(['--consolidate', '--dir', 'nonexistent_directory'])
+        end.to raise_error(RubySpriter::ValidationError, /Directory not found/)
+      end
+
+      it 'cannot use --dir with comma-separated file list' do
+        expect do
+          described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--dir', test_dir])
+        end.to raise_error(RubySpriter::ValidationError, /Cannot use --dir with comma-separated file list/)
+      end
+
+      it 'works with --output option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:output]).to eq('custom_output.png')
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--output', 'custom_output.png'])
+      end
+
+      it 'works with --outputdir option' do
+        output_dir = File.join(@test_dir, 'output')
+        FileUtils.mkdir_p(output_dir)
+
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:outputdir]).to eq(output_dir)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--outputdir', output_dir])
+      end
+
+      it 'works with --overwrite option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--overwrite'])
+      end
+
+      it 'works with --max-compress option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:dir]).to eq(test_dir)
+          expect(options[:max_compress]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', '--dir', test_dir, '--max-compress'])
       end
     end
   end

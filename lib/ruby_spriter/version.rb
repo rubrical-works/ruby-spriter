@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module RubySpriter
-  VERSION = '0.6.7'
+  VERSION = '0.6.8'
   VERSION_DATE = '2025-10-24'
   METADATA_VERSION = '0.6'
 end

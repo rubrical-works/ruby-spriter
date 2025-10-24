@@ -89,8 +89,9 @@ module RubySpriter
         options[:batch_consolidate] = true
       end
 
-      opts.on("--consolidate FILES", Array, "Consolidate multiple spritesheets (comma-separated)") do |c|
-        options[:consolidate] = c
+      opts.on("--consolidate [FILES]", Array, "Consolidate spritesheets (comma-separated files or use with --dir)") do |c|
+        options[:consolidate_mode] = true
+        options[:consolidate] = c if c && !c.empty?
       end
 
       opts.on("--verify FILE", "Verify spritesheet metadata") do |v|
@@ -282,6 +283,8 @@ module RubySpriter
       opts.separator "  ruby_spriter --batch --dir videos/ --outputdir output/"
       opts.separator "  ruby_spriter --batch --dir videos/ --batch-consolidate --max-compress"
       opts.separator "  ruby_spriter --consolidate file1.png,file2.png,file3.png"
+      opts.separator "  ruby_spriter --consolidate --dir spritesheets/"
+      opts.separator "  ruby_spriter --consolidate --dir spritesheets/ --outputdir output/ --max-compress"
       opts.separator "  ruby_spriter --verify spritesheet.png"
       opts.separator ""
     end

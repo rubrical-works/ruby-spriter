@@ -79,7 +79,7 @@ module RubySpriter
     end
 
     def validate_options!
-      input_modes = [options[:video], options[:image], options[:consolidate], options[:verify], options[:batch]].compact
+      input_modes = [options[:video], options[:image], options[:consolidate_mode], options[:verify], options[:batch]].compact
 
       if input_modes.empty?
         raise ValidationError, "Must specify --video, --image, --consolidate, --verify, or --batch"
@@ -89,9 +89,31 @@ module RubySpriter
         raise ValidationError, "Cannot use multiple input modes together. Choose one."
       end
 
+      validate_consolidate_options!
       validate_input_files!
       validate_numeric_options!
       validate_split_option!
+    end
+
+    def validate_consolidate_options!
+      return unless options[:consolidate_mode]
+
+      # Check for mutual exclusivity between file list and directory
+      if options[:consolidate] && options[:dir]
+        raise ValidationError, "Cannot use --dir with comma-separated file list for --consolidate. Choose one method."
+      end
+
+      # Require either file list or directory
+      unless options[:consolidate] || options[:dir]
+        raise ValidationError, "--consolidate requires either comma-separated files or --dir option"
+      end
+
+      # Validate directory if using directory mode
+      if options[:dir] && !options[:consolidate]
+        unless File.directory?(options[:dir])
+          raise ValidationError, "Directory not found: #{options[:dir]}"
+        end
+      end
     end
 
     def validate_input_files!
@@ -233,7 +255,7 @@ module RubySpriter
 
       if options[:batch]
         return execute_batch_workflow
-      elsif options[:consolidate]
+      elsif options[:consolidate_mode]
         return execute_consolidate_workflow
       elsif options[:image]
         return execute_image_workflow
@@ -353,10 +375,36 @@ module RubySpriter
     def execute_consolidate_workflow
       consolidator = Consolidator.new(options)
 
-      desired_output = options[:output] || generate_consolidated_filename
+      # Determine file list: either from command line or from directory
+      files_to_consolidate = if options[:dir] && !options[:consolidate]
+                               # Directory-based consolidation
+                               consolidator.find_spritesheets_in_directory(options[:dir])
+                             else
+                               # File list consolidation
+                               options[:consolidate]
+                             end
+
+      # Determine output filename and directory
+      if options[:dir] && !options[:consolidate]
+        # Directory mode: output to dir or outputdir
+        output_dir = options[:outputdir] || options[:dir]
+        desired_output = if options[:output]
+                           File.join(output_dir, File.basename(options[:output]))
+                         else
+                           File.join(output_dir, generate_consolidated_filename)
+                         end
+      else
+        # File list mode: use current directory behavior
+        if options[:outputdir]
+          desired_output = File.join(options[:outputdir], options[:output] || generate_consolidated_filename)
+        else
+          desired_output = options[:output] || generate_consolidated_filename
+        end
+      end
+
       final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
-      result = consolidator.consolidate(options[:consolidate], final_output)
+      result = consolidator.consolidate(files_to_consolidate, final_output)
 
       # Apply max compression if requested
       if options[:max_compress]

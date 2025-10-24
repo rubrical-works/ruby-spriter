@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.7
+**Current Version**: 0.6.8
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -123,6 +123,11 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Validates column compatibility between spritesheets
 - Uses ImageMagick's `-append` to stack vertically
 - Calculates combined metadata (total frames, new row count)
+- Supports two consolidation modes:
+  - File list mode: comma-separated PNG files
+  - Directory mode: scans directory for PNGs with metadata, filters and sorts alphabetically
+- Directory scanning with `find_spritesheets_in_directory` method
+- Requires at least 2 spritesheets for consolidation
 
 **BatchProcessor** (lib/ruby_spriter/batch_processor.rb)
 - Processes multiple MP4 files in a directory

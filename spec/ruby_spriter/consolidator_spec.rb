@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'securerandom'
 
 RSpec.describe RubySpriter::Consolidator do
   let(:spritesheet1) { File.join(__dir__, '..', 'fixtures', 'spritesheet_4x2.png') }
@@ -370,6 +371,111 @@ RSpec.describe RubySpriter::Consolidator do
           consolidator.consolidate([spritesheet1, spritesheet2], output_file)
         }.to output(/Combined 2 spritesheets/).to_stdout
       end
+    end
+  end
+
+  describe '#find_spritesheets_in_directory' do
+    let(:consolidator) { described_class.new }
+    let(:image_without_meta) { File.join(__dir__, '..', 'fixtures', 'image_without_metadata.png') }
+
+    # Helper to create a unique test directory for each test
+    def create_test_dir
+      dir = File.join($test_temp_dir, "consolidate_test_#{SecureRandom.hex(8)}")
+      FileUtils.mkdir_p(dir)
+      dir
+    end
+
+    it 'finds all PNG files with metadata in directory' do
+      test_dir = create_test_dir
+      # Copy spritesheets with metadata to test directory
+      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
+      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
+
+      found_files = consolidator.find_spritesheets_in_directory(test_dir)
+
+      expect(found_files.length).to eq(2)
+      expect(found_files).to include(File.join(test_dir, 'sprite1.png'))
+      expect(found_files).to include(File.join(test_dir, 'sprite2.png'))
+    end
+
+    it 'excludes PNG files without metadata' do
+      test_dir = create_test_dir
+      # Copy two spritesheets with metadata and one image without
+      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
+      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
+      FileUtils.cp(image_without_meta, File.join(test_dir, 'no_meta.png'))
+
+      found_files = consolidator.find_spritesheets_in_directory(test_dir)
+
+      expect(found_files.length).to eq(2)
+      expect(found_files).to include(File.join(test_dir, 'sprite1.png'))
+      expect(found_files).to include(File.join(test_dir, 'sprite2.png'))
+      expect(found_files).not_to include(File.join(test_dir, 'no_meta.png'))
+    end
+
+    it 'returns files sorted alphabetically' do
+      test_dir = create_test_dir
+      # Copy spritesheets with names that test alphabetical sorting
+      FileUtils.cp(spritesheet1, File.join(test_dir, 'c_sprite.png'))
+      FileUtils.cp(spritesheet2, File.join(test_dir, 'a_sprite.png'))
+      FileUtils.cp(spritesheet3, File.join(test_dir, 'b_sprite.png'))
+
+      found_files = consolidator.find_spritesheets_in_directory(test_dir)
+
+      expect(found_files.length).to eq(3)
+      expect(found_files[0]).to end_with('a_sprite.png')
+      expect(found_files[1]).to end_with('b_sprite.png')
+      expect(found_files[2]).to end_with('c_sprite.png')
+    end
+
+    it 'raises error when directory does not exist' do
+      expect {
+        consolidator.find_spritesheets_in_directory('nonexistent_directory')
+      }.to raise_error(RubySpriter::ValidationError, /Directory not found/)
+    end
+
+    it 'raises error when no PNG files with metadata found' do
+      # Create empty directory
+      empty_dir = File.join($test_temp_dir, 'empty_dir')
+      FileUtils.mkdir_p(empty_dir)
+
+      expect {
+        consolidator.find_spritesheets_in_directory(empty_dir)
+      }.to raise_error(RubySpriter::ValidationError, /No PNG files with spritesheet metadata found/)
+    end
+
+    it 'raises error when directory has PNGs but none with metadata' do
+      test_dir = create_test_dir
+      # Copy only image without metadata
+      FileUtils.cp(image_without_meta, File.join(test_dir, 'no_meta.png'))
+
+      expect {
+        consolidator.find_spritesheets_in_directory(test_dir)
+      }.to raise_error(RubySpriter::ValidationError, /No PNG files with spritesheet metadata found/)
+    end
+
+    it 'handles directory with mixed file types' do
+      test_dir = create_test_dir
+      # Copy spritesheets and create non-PNG files
+      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
+      FileUtils.cp(spritesheet2, File.join(test_dir, 'sprite2.png'))
+      File.write(File.join(test_dir, 'readme.txt'), 'test')
+      File.write(File.join(test_dir, 'data.json'), '{}')
+
+      found_files = consolidator.find_spritesheets_in_directory(test_dir)
+
+      expect(found_files.length).to eq(2)
+      expect(found_files).to all(end_with('.png'))
+    end
+
+    it 'requires at least 2 spritesheets' do
+      test_dir = create_test_dir
+      # Copy only one spritesheet
+      FileUtils.cp(spritesheet1, File.join(test_dir, 'sprite1.png'))
+
+      expect {
+        consolidator.find_spritesheets_in_directory(test_dir)
+      }.to raise_error(RubySpriter::ValidationError, /Found only 1 spritesheet, need at least 2/)
     end
   end
 end
