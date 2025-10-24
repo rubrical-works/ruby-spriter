@@ -2,15 +2,31 @@
 
 require 'fileutils'
 require 'tmpdir'
+require 'open3'
 
 module RubySpriter
   # Main orchestration processor
   class Processor
-    attr_reader :options, :gimp_path
+    attr_reader :options, :gimp_path, :split_rows, :split_columns
+
+    # Valid ranges for numeric options
+    VALID_RANGES = {
+      frame_count: { min: 1, max: 10000, type: Integer },
+      columns: { min: 1, max: 100, type: Integer },
+      max_width: { min: 1, max: 1920, type: Integer },
+      scale_percent: { min: 1, max: 500, type: Integer },
+      grow_selection: { min: 0, max: 100, type: Integer },
+      sharpen_radius: { min: 0.1, max: 100.0, type: Float },
+      sharpen_gain: { min: 0.0, max: 10.0, type: Float },
+      sharpen_threshold: { min: 0.0, max: 1.0, type: Float },
+      bg_threshold: { min: 0.0, max: 100.0, type: Float }
+    }.freeze
 
     def initialize(options = {})
       @options = default_options.merge(options)
       @gimp_path = nil
+      validate_numeric_options!
+      validate_split_option!
     end
 
     # Run the processing workflow
@@ -55,13 +71,16 @@ module RubySpriter
         temp_dir: nil,
         keep_temp: false,
         debug: false,
-        overwrite: false
+        overwrite: false,
+        save_frames: false,
+        split: nil,
+        override_md: false
       }
     end
 
     def validate_options!
       input_modes = [options[:video], options[:image], options[:consolidate], options[:verify]].compact
-      
+
       if input_modes.empty?
         raise ValidationError, "Must specify --video, --image, --consolidate, or --verify"
       end
@@ -71,6 +90,8 @@ module RubySpriter
       end
 
       validate_input_files!
+      validate_numeric_options!
+      validate_split_option!
     end
 
     def validate_input_files!
@@ -107,6 +128,53 @@ module RubySpriter
         expected = valid_extensions.join(', ')
         raise ValidationError, "#{flag_name} expects #{expected} file, got: #{ext || '(no extension)'}"
       end
+    end
+
+    def validate_numeric_options!
+      VALID_RANGES.each do |option_name, range_config|
+        value = options[option_name]
+
+        # Skip validation if option is not set (nil)
+        next if value.nil?
+
+        min = range_config[:min]
+        max = range_config[:max]
+
+        # Validate that value is within range
+        if value < min || value > max
+          raise ValidationError, "#{option_name} must be between #{min} and #{max}, got: #{value}"
+        end
+      end
+    end
+
+    def validate_split_option!
+      return unless options[:split]
+
+      # Parse split format: R:C
+      unless options[:split] =~ /^\d+:\d+$/
+        raise ValidationError, "Invalid --split format. Use R:C (e.g., 4:4)"
+      end
+
+      rows, columns = options[:split].split(':').map(&:to_i)
+
+      # Validate ranges
+      if rows < 1 || rows > 99
+        raise ValidationError, "rows must be between 1 and 99, got: #{rows}"
+      end
+
+      if columns < 1 || columns > 99
+        raise ValidationError, "columns must be between 1 and 99, got: #{columns}"
+      end
+
+      # Validate total frames < 1000
+      total_frames = rows * columns
+      if total_frames >= 1000
+        raise ValidationError, "Total frames (#{total_frames}) must be less than 1000"
+      end
+
+      # Store parsed values for later use
+      @split_rows = rows
+      @split_columns = columns
     end
 
     def check_dependencies!
@@ -185,16 +253,33 @@ module RubySpriter
       )
 
       working_file = result[:output_file]
+      intermediate_files = []
 
       # Step 3: Apply GIMP processing if requested
       if needs_gimp?
+        initial_file = working_file
         working_file = process_with_gimp(working_file)
+
+        # Track intermediate files for cleanup (everything except initial and final)
+        if working_file != initial_file
+          intermediate_files = collect_intermediate_files(initial_file, working_file)
+        end
       end
 
       # Step 4: Move to final output location if different
       if final_output != working_file
         FileUtils.cp(working_file, final_output)
+        # Add the GIMP output to intermediates if it's different from final
+        intermediate_files << working_file unless intermediate_files.include?(working_file)
         working_file = final_output
+      end
+
+      # Step 5: Clean up intermediate files
+      cleanup_intermediate_files(intermediate_files)
+
+      # Step 6: Extract individual frames if requested
+      if options[:save_frames]
+        split_frames_from_spritesheet(working_file, result[:columns], result[:rows], result[:frames])
       end
 
       Utils::OutputFormatter.header("SUCCESS!")
@@ -205,10 +290,17 @@ module RubySpriter
 
     def execute_image_workflow
       working_file = options[:image]
+      intermediate_files = []
 
       # Apply GIMP processing if requested (GimpProcessor handles uniqueness)
       if needs_gimp?
+        initial_file = working_file
         working_file = process_with_gimp(working_file)
+
+        # Track intermediate files for cleanup (everything except initial and final)
+        if working_file != initial_file
+          intermediate_files = collect_intermediate_files(initial_file, working_file)
+        end
       end
 
       # Move to final output location if user specified explicit --output
@@ -216,8 +308,24 @@ module RubySpriter
         final_output = Utils::FileHelper.ensure_unique_output(options[:output], overwrite: options[:overwrite])
         if working_file != final_output
           FileUtils.cp(working_file, final_output)
+          # Add the GIMP output to intermediates if it's different from final
+          intermediate_files << working_file unless intermediate_files.include?(working_file)
           working_file = final_output
         end
+      end
+
+      # Clean up intermediate files
+      cleanup_intermediate_files(intermediate_files)
+
+      # Determine if we should split the image into frames
+      should_split = options[:save_frames] || options[:split]
+
+      if should_split
+        # Determine rows, columns, and frames to use
+        rows, columns, frames = determine_split_parameters(working_file)
+
+        # Split the image into frames
+        split_frames_from_spritesheet(working_file, columns, rows, frames)
       end
 
       Utils::OutputFormatter.header("SUCCESS!")
@@ -253,10 +361,120 @@ module RubySpriter
       "consolidated_spritesheet.png"
     end
 
+    def split_frames_from_spritesheet(spritesheet_file, columns, rows, frames)
+      # Determine frames directory based on spritesheet filename
+      spritesheet_basename = File.basename(spritesheet_file, '.*')
+      frames_dir = File.join(File.dirname(spritesheet_file), "#{spritesheet_basename}_frames")
+
+      # Split the spritesheet into individual frames
+      splitter = Utils::SpritesheetSplitter.new
+      splitter.split_into_frames(spritesheet_file, frames_dir, columns, rows, frames)
+    end
+
+    def collect_intermediate_files(initial_file, final_file)
+      # Find all files that were created during GIMP processing
+      # Pattern: initial_file + suffixes like -nobg-fuzzy, -scaled-40pct, etc.
+      # Note: output_filename uses DASH separator, not underscore
+      dir = File.dirname(initial_file)
+      basename = File.basename(initial_file, '.*')
+      ext = File.extname(initial_file)
+
+      # Get all PNG files in the directory that start with the basename and have a dash
+      pattern = File.join(dir, "#{basename}-*#{ext}")
+      intermediate_files = Dir.glob(pattern)
+
+      # Normalize paths for comparison (Windows compatibility)
+      initial_normalized = File.expand_path(initial_file)
+      final_normalized = File.expand_path(final_file)
+
+      # Exclude the initial and final files
+      intermediate_files.reject do |f|
+        f_normalized = File.expand_path(f)
+        f_normalized == initial_normalized || f_normalized == final_normalized
+      end
+    end
+
+    def cleanup_intermediate_files(files)
+      return if files.empty?
+
+      if options[:debug]
+        Utils::OutputFormatter.note("Cleaning up #{files.length} intermediate file(s):")
+      end
+
+      files.each do |file|
+        if File.exist?(file)
+          File.delete(file)
+          if options[:debug]
+            Utils::OutputFormatter.indent("Deleted: #{File.basename(file)}")
+          end
+        end
+      end
+    end
+
     def cleanup
       if options[:temp_dir] && Dir.exist?(options[:temp_dir])
         FileUtils.rm_rf(options[:temp_dir])
         Utils::OutputFormatter.note("Cleaned up temporary files") if options[:debug]
+      end
+    end
+
+    def determine_split_parameters(image_file)
+      metadata = MetadataManager.read(image_file)
+
+      # Check if we have metadata
+      if metadata && metadata[:columns] && metadata[:rows] && metadata[:frames]
+        # Metadata exists
+        if options[:split] && !options[:override_md]
+          # Warn user that split values will be ignored
+          Utils::OutputFormatter.note("Image has metadata (#{metadata[:rows]}×#{metadata[:columns]}). Your --split values will be ignored. Use --override-md to override.")
+          return [metadata[:rows], metadata[:columns], metadata[:frames]]
+        elsif options[:split] && options[:override_md]
+          # Use user's split values
+          frames = @split_rows * @split_columns
+          validate_image_dimensions(image_file, @split_rows, @split_columns)
+          return [@split_rows, @split_columns, frames]
+        else
+          # Use metadata
+          return [metadata[:rows], metadata[:columns], metadata[:frames]]
+        end
+      else
+        # No metadata
+        if options[:split]
+          # Use user's split values
+          frames = @split_rows * @split_columns
+          validate_image_dimensions(image_file, @split_rows, @split_columns)
+          return [@split_rows, @split_columns, frames]
+        else
+          # Error: no metadata and no split option
+          raise ValidationError, "Image has no metadata. Please provide --split R:C"
+        end
+      end
+    end
+
+    def validate_image_dimensions(image_file, rows, columns)
+      # Get image dimensions using ImageMagick
+      cmd = [
+        'magick',
+        'identify',
+        '-format', '%wx%h',
+        Utils::PathHelper.quote_path(image_file)
+      ].join(' ')
+
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Could not get image dimensions: #{stderr}"
+      end
+
+      width, height = stdout.strip.split('x').map(&:to_i)
+
+      # Check if dimensions divide evenly
+      unless width % columns == 0
+        raise ValidationError, "Image width (#{width}) not evenly divisible by #{columns} columns"
+      end
+
+      unless height % rows == 0
+        raise ValidationError, "Image height (#{height}) not evenly divisible by #{rows} rows"
       end
     end
   end

@@ -1008,6 +1008,19 @@ RSpec.describe RubySpriter::CLI do
 
         described_class.start(['--video', fixture_video, '--output', 'custom_spritesheet.png'])
       end
+
+      it 'works with --save-frames option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:video]).to eq(fixture_video)
+          expect(options[:save_frames]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--video', fixture_video, '--save-frames'])
+      end
     end
 
     describe 'preset configurations' do
@@ -1458,6 +1471,34 @@ RSpec.describe RubySpriter::CLI do
           expect { described_class.start(['--invalid-option']) }
             .to output(/Use --help for usage information/).to_stdout
         end.to raise_error(SystemExit)
+      end
+    end
+
+    describe '--split option' do
+      it 'parses split option with R:C format' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:split]).to eq('4:4')
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--split', '4:4'])
+      end
+    end
+
+    describe '--override-md option' do
+      it 'sets override_md option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:override_md]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', 'test.png', '--split', '4:4', '--override-md'])
       end
     end
   end

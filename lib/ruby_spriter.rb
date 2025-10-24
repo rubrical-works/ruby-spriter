@@ -15,6 +15,7 @@ require_relative 'ruby_spriter/version'
 require_relative 'ruby_spriter/utils/path_helper'
 require_relative 'ruby_spriter/utils/file_helper'
 require_relative 'ruby_spriter/utils/output_formatter'
+require_relative 'ruby_spriter/utils/spritesheet_splitter'
 
 # Load core components
 require_relative 'ruby_spriter/platform'

@@ -27,26 +27,26 @@ module RubySpriter
       rows = (frame_count.to_f / columns).ceil
 
       Utils::OutputFormatter.header("Creating Spritesheet")
-      
+
       temp_file = output_file.sub('.png', '_temp.png')
-      
+
       create_with_ffmpeg(video_file, temp_file, duration, columns, rows, frame_count)
-      
+
       # Embed metadata
       MetadataManager.embed(
-        temp_file, 
+        temp_file,
         output_file,
         columns: columns,
         rows: rows,
         frames: frame_count,
         debug: options[:debug]
       )
-      
+
       # Clean up temp file
       File.delete(temp_file) if File.exist?(temp_file)
-      
+
       file_size = File.size(output_file)
-      
+
       # Display results with Godot instructions
       display_spritesheet_results(output_file, file_size, columns, rows, frame_count)
 

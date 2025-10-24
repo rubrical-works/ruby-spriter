@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.6] - 2025-10-23
 
-### 🔒 File Protection & Safety Release
+### 🔒 File Protection & Frame Extraction Release
 
 #### Added
 - **Automatic Unique Filenames**: By default, generates timestamped filenames to prevent accidental overwrites
@@ -22,24 +22,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Applies to all output modes: `--video`, `--image`, `--consolidate`
   - Works with both auto-generated and `--output` specified filenames
 - **`--overwrite` Flag**: Optional flag to explicitly allow overwriting existing files
-- **File Protection Tests**: 19 new comprehensive tests for filename uniqueness and overwrite behavior
-  - CLI integration tests for `--overwrite` flag
-  - Output filename behavior tests for all modes
-  - FileHelper utility tests for unique filename generation
+- **`--split R:C` Option**: Split spritesheets into individual frames for `--image` workflow
+  - Format: `--split 4:4` (rows:columns, e.g., 4 rows × 4 columns)
+  - Validation: Rows and columns must be 1-99, total frames < 1000
+  - Frame naming: `FRddd_filename.png` (3-digit zero-padded format: FR001, FR002, ..., FR999)
+  - Output directory: `filename_frames/`
+  - Metadata priority: Uses embedded metadata if available, unless `--override-md` flag is provided
+  - Dimension validation: Image dimensions must divide evenly by specified rows and columns
+- **`--override-md` Flag**: Override embedded metadata when using `--split` with images that have metadata
+- **Intermediate File Cleanup**: Fixed cleanup of intermediate files from GIMP processing
+  - Now correctly removes files with dash separator (e.g., `file-nobg-fuzzy.png`, `file-scaled-40pct.png`)
+  - Added Windows-compatible path normalization for file comparison
+- **Frame Extraction Tests**: 17 new comprehensive tests for split functionality
+  - CLI option tests for `--split` and `--override-md`
+  - Format and range validation tests (10 tests)
+  - Metadata priority logic tests (5 tests)
+  - Updated SpritesheetSplitter tests for FR%03d format
 
 #### Changed
 - **Default Behavior**: Changed from overwriting to creating unique files (breaking change, but safer)
 - **GimpProcessor**: Now respects `--overwrite` flag for scaled and background-removed images
 - **Consolidate Workflow**: Default filename changed from `consolidated_spritesheet_TIMESTAMP.png` to `consolidated_spritesheet.png` (uniqueness handled by flag)
+- **Frame Naming Format**: Changed from FR%02d (2 digits) to FR%03d (3 digits) to support up to 999 frames
+- **Intermediate File Pattern**: Fixed glob pattern from underscore to dash separator for GIMP output files
 
 #### Technical Details
 - New utility methods in `Utils::FileHelper`:
   - `unique_filename(path)` - Generates timestamped filename if file exists
   - `ensure_unique_output(path, overwrite:)` - Applies overwrite logic
+- New methods in `Processor`:
+  - `validate_split_option!` - Validates split format and ranges during initialization
+  - `determine_split_parameters(image_file)` - Implements metadata priority logic
+  - `validate_image_dimensions(image_file, rows, columns)` - Validates even division
 - Processor workflows updated to use `ensure_unique_output` for all output paths
-- Test coverage increased to 61.8% (500/809 lines)
+- `SpritesheetSplitter` updated to use 3-digit frame format (FR%03d)
+- Test coverage increased to 72.27% (688/952 lines)
 
-Closes #17
+Closes #17, #19, #30
 
 ---
 
