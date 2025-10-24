@@ -18,6 +18,12 @@ module RubySpriter
 
     def parse_and_run(args)
       options = {}
+
+      # Handle context-sensitive help before validation
+      if args.include?('--help') || args.include?('-h')
+        handle_context_sensitive_help(args)
+      end
+
       parser = build_option_parser(options)
 
       parser.parse!(args)
@@ -59,6 +65,13 @@ module RubySpriter
       opts.separator ""
       opts.separator "Ruby Spriter v#{VERSION} - MP4 to Spritesheet + GIMP Processing"
       opts.separator "Platform: #{Platform.current.to_s.capitalize}"
+      opts.separator ""
+      opts.separator "Get mode-specific help:"
+      opts.separator "  ruby_spriter --video --help"
+      opts.separator "  ruby_spriter --image --help"
+      opts.separator "  ruby_spriter --consolidate --help"
+      opts.separator "  ruby_spriter --batch --help"
+      opts.separator "  ruby_spriter --split --help"
       opts.separator ""
     end
 
@@ -140,7 +153,7 @@ module RubySpriter
     end
 
     def add_gimp_options(opts, options)
-      opts.separator "GIMP Processing Options:"
+      opts.separator "Processing Options:"
 
       opts.on("-s", "--scale PERCENT", Integer, "Scale image by percentage") do |s|
         options[:scale_percent] = s
@@ -287,6 +300,264 @@ module RubySpriter
       opts.separator "  ruby_spriter --consolidate --dir spritesheets/ --outputdir output/ --max-compress"
       opts.separator "  ruby_spriter --verify spritesheet.png"
       opts.separator ""
+    end
+
+    def handle_context_sensitive_help(args)
+      if args.include?('--video') || args.include?('-v')
+        show_video_mode_help
+      elsif args.include?('--image') || args.include?('-i')
+        show_image_mode_help
+      elsif args.include?('--consolidate')
+        show_consolidate_mode_help
+      elsif args.include?('--batch')
+        show_batch_mode_help
+      elsif args.include?('--split')
+        show_split_mode_help
+      else
+        # Default help - let OptionParser handle it
+        return
+      end
+    end
+
+    def show_video_mode_help
+      puts ""
+      puts "Video Mode"
+      puts "=" * 60
+      puts ""
+      puts "Convert MP4 video files to spritesheets with optional GIMP processing."
+      puts ""
+      puts "Basic Usage:"
+      puts "  ruby_spriter --video FILE [options]"
+      puts ""
+      puts "Required:"
+      puts "  -v, --video FILE                 Input video file (MP4)"
+      puts ""
+      puts "Spritesheet Options:"
+      puts "  -o, --output FILE                Output file path"
+      puts "  -f, --frames COUNT               Number of frames to extract (default: 16)"
+      puts "  -c, --columns COUNT              Grid columns (default: 4)"
+      puts "  -w, --width PIXELS               Max frame width (default: 320)"
+      puts "  -b, --background COLOR           Tile background: black, white (default: black)"
+      puts "  --save-frames                    Save individual frames to disk"
+      puts ""
+      puts "Processing Options:"
+      puts "  -s, --scale PERCENT              Scale image by percentage"
+      puts "  --interpolation METHOD           Interpolation: none, linear, cubic, nohalo, lohalo (default: nohalo)"
+      puts "  --sharpen                        Apply unsharp mask after scaling"
+      puts "  --sharpen-radius VALUE           Sharpen radius in pixels (default: 2.0)"
+      puts "  --sharpen-gain VALUE             Sharpen gain/strength (default: 0.5, range: 0.0-2.0+)"
+      puts "  --sharpen-threshold VALUE        Sharpen threshold (default: 0.03, range: 0.0-1.0)"
+      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -t, --threshold VALUE            Feather radius (default: 0.0)"
+      puts "  -g, --grow PIXELS                Pixels to grow selection (default: 1)"
+      puts "  --fuzzy                          Use fuzzy select (DEFAULT)"
+      puts "  --no-fuzzy                       Use global color select"
+      puts "  --order ORDER                    Operation order: scale_first or bg_first (default: scale_first)"
+      puts ""
+      puts "Output Options:"
+      puts "  --max-compress                   Apply maximum PNG compression"
+      puts "  --overwrite                      Overwrite existing files"
+      puts "  --keep-temp                      Keep temporary files"
+      puts "  --debug                          Enable debug mode"
+      puts ""
+      puts "Examples:"
+      puts "  ruby_spriter --video input.mp4"
+      puts "  ruby_spriter --video input.mp4 --scale 50"
+      puts "  ruby_spriter --video input.mp4 --remove-bg --scale 50"
+      puts "  ruby_spriter --video input.mp4 --scale 50 --sharpen --max-compress"
+      puts ""
+      exit
+    end
+
+    def show_image_mode_help
+      puts ""
+      puts "Image Mode"
+      puts "=" * 60
+      puts ""
+      puts "Process existing PNG spritesheets with GIMP operations."
+      puts ""
+      puts "Basic Usage:"
+      puts "  ruby_spriter --image FILE [options]"
+      puts ""
+      puts "Required:"
+      puts "  -i, --image FILE                 Input image file (PNG)"
+      puts ""
+      puts "Processing Options:"
+      puts "  -s, --scale PERCENT              Scale image by percentage"
+      puts "  --interpolation METHOD           Interpolation: none, linear, cubic, nohalo, lohalo (default: nohalo)"
+      puts "  --sharpen                        Apply unsharp mask after scaling"
+      puts "  --sharpen-radius VALUE           Sharpen radius in pixels (default: 2.0)"
+      puts "  --sharpen-gain VALUE             Sharpen gain/strength (default: 0.5, range: 0.0-2.0+)"
+      puts "  --sharpen-threshold VALUE        Sharpen threshold (default: 0.03, range: 0.0-1.0)"
+      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -t, --threshold VALUE            Feather radius (default: 0.0)"
+      puts "  -g, --grow PIXELS                Pixels to grow selection (default: 1)"
+      puts "  --fuzzy                          Use fuzzy select (DEFAULT)"
+      puts "  --no-fuzzy                       Use global color select"
+      puts "  --order ORDER                    Operation order: scale_first or bg_first (default: scale_first)"
+      puts ""
+      puts "Frame Extraction:"
+      puts "  --split R:C                      Split spritesheet into frames (rows:columns, e.g., 4:4)"
+      puts "  --override-md                    Override embedded metadata when splitting"
+      puts ""
+      puts "Output Options:"
+      puts "  -o, --output FILE                Output file path"
+      puts "  --max-compress                   Apply maximum PNG compression"
+      puts "  --overwrite                      Overwrite existing files"
+      puts "  --keep-temp                      Keep temporary files"
+      puts "  --debug                          Enable debug mode"
+      puts ""
+      puts "Examples:"
+      puts "  ruby_spriter --image sprite.png --scale 50"
+      puts "  ruby_spriter --image sprite.png --remove-bg --fuzzy"
+      puts "  ruby_spriter --image sprite.png --scale 50 --sharpen --max-compress"
+      puts "  ruby_spriter --image sprite.png --split 4:4"
+      puts ""
+      exit
+    end
+
+    def show_consolidate_mode_help
+      puts ""
+      puts "Consolidate Mode"
+      puts "=" * 60
+      puts ""
+      puts "Combine multiple spritesheets into a single consolidated spritesheet."
+      puts ""
+      puts "Basic Usage:"
+      puts "  ruby_spriter --consolidate FILE1,FILE2,FILE3 [options]"
+      puts "  ruby_spriter --consolidate --dir DIRECTORY [options]"
+      puts ""
+      puts "Input Methods:"
+      puts "  --consolidate [FILES]            Comma-separated list of PNG files"
+      puts "  --consolidate --dir DIRECTORY    Process all spritesheets in directory"
+      puts ""
+      puts "Consolidation Options:"
+      puts "  --[no-]validate-columns          Abort if column counts don't match (default: true)"
+      puts ""
+      puts "Output Options:"
+      puts "  -o, --output FILE                Output file path"
+      puts "  --outputdir DIRECTORY            Output directory (when using --dir)"
+      puts "  --max-compress                   Apply maximum PNG compression"
+      puts "  --overwrite                      Overwrite existing files"
+      puts "  --keep-temp                      Keep temporary files"
+      puts "  --debug                          Enable debug mode"
+      puts ""
+      puts "Requirements:"
+      puts "  - All input files must be PNG spritesheets with embedded metadata"
+      puts "  - Column counts must match across all spritesheets (unless --no-validate-columns)"
+      puts "  - Minimum 2 spritesheets required"
+      puts ""
+      puts "Examples:"
+      puts "  ruby_spriter --consolidate file1.png,file2.png,file3.png"
+      puts "  ruby_spriter --consolidate --dir spritesheets/"
+      puts "  ruby_spriter --consolidate --dir spritesheets/ --outputdir output/"
+      puts "  ruby_spriter --consolidate --dir spritesheets/ --max-compress"
+      puts ""
+      exit
+    end
+
+    def show_batch_mode_help
+      puts ""
+      puts "Batch Mode"
+      puts "=" * 60
+      puts ""
+      puts "Process multiple MP4 videos in a directory with consistent options."
+      puts ""
+      puts "Basic Usage:"
+      puts "  ruby_spriter --batch --dir DIRECTORY [options]"
+      puts ""
+      puts "Required:"
+      puts "  --batch                          Enable batch processing mode"
+      puts "  --dir DIRECTORY                  Directory containing MP4 files"
+      puts ""
+      puts "Output Options:"
+      puts "  --outputdir DIRECTORY            Output directory (default: same as input dir)"
+      puts "  --batch-consolidate              Consolidate all results into single spritesheet"
+      puts ""
+      puts "Spritesheet Options (applied to all videos):"
+      puts "  -f, --frames COUNT               Number of frames to extract (default: 16)"
+      puts "  -c, --columns COUNT              Grid columns (default: 4)"
+      puts "  -w, --width PIXELS               Max frame width (default: 320)"
+      puts "  -b, --background COLOR           Tile background: black, white (default: black)"
+      puts "  --save-frames                    Save individual frames to disk"
+      puts ""
+      puts "Processing Options (applied to all videos):"
+      puts "  -s, --scale PERCENT              Scale images by percentage"
+      puts "  --interpolation METHOD           Interpolation: none, linear, cubic, nohalo, lohalo (default: nohalo)"
+      puts "  --sharpen                        Apply unsharp mask after scaling"
+      puts "  --sharpen-radius VALUE           Sharpen radius (default: 2.0)"
+      puts "  --sharpen-gain VALUE             Sharpen gain (default: 0.5)"
+      puts "  --sharpen-threshold VALUE        Sharpen threshold (default: 0.03)"
+      puts "  -r, --remove-bg                  Remove background using GIMP"
+      puts "  -t, --threshold VALUE            Feather radius (default: 0.0)"
+      puts "  -g, --grow PIXELS                Grow selection (default: 1)"
+      puts "  --fuzzy                          Use fuzzy select (DEFAULT)"
+      puts "  --no-fuzzy                       Use global color select"
+      puts "  --order ORDER                    Operation order: scale_first or bg_first (default: scale_first)"
+      puts ""
+      puts "Other Options:"
+      puts "  --max-compress                   Apply maximum PNG compression"
+      puts "  --overwrite                      Overwrite existing files"
+      puts "  --keep-temp                      Keep temporary files"
+      puts "  --debug                          Enable debug mode"
+      puts ""
+      puts "Behavior:"
+      puts "  - Processes all MP4 files in the specified directory"
+      puts "  - Enforces unique filenames unless --overwrite is specified"
+      puts "  - Continues processing remaining videos if one fails"
+      puts "  - Provides summary of successes and failures"
+      puts ""
+      puts "Examples:"
+      puts "  ruby_spriter --batch --dir videos/"
+      puts "  ruby_spriter --batch --dir videos/ --outputdir output/"
+      puts "  ruby_spriter --batch --dir videos/ --scale 50 --max-compress"
+      puts "  ruby_spriter --batch --dir videos/ --batch-consolidate"
+      puts ""
+      exit
+    end
+
+    def show_split_mode_help
+      puts ""
+      puts "Split Mode"
+      puts "=" * 60
+      puts ""
+      puts "Extract individual frames from a spritesheet (requires --image)."
+      puts ""
+      puts "Basic Usage:"
+      puts "  ruby_spriter --image FILE --split R:C [options]"
+      puts ""
+      puts "Required:"
+      puts "  -i, --image FILE                 Input spritesheet file (PNG)"
+      puts "  --split R:C                      Split format: rows:columns (e.g., 4:4)"
+      puts ""
+      puts "Format Requirements:"
+      puts "  - Rows and columns must be 1-99"
+      puts "  - Total frames (R × C) must be < 1000"
+      puts "  - Image dimensions must divide evenly by rows and columns"
+      puts ""
+      puts "Metadata Behavior:"
+      puts "  - If spritesheet has embedded metadata, it will be used automatically"
+      puts "  - Use --override-md to ignore embedded metadata and use --split value"
+      puts "  - If no metadata exists, --split value is required"
+      puts ""
+      puts "Options:"
+      puts "  --override-md                    Override embedded metadata"
+      puts "  -o, --output FILE                Output directory (default: filename_frames/)"
+      puts "  --overwrite                      Overwrite existing files"
+      puts "  --keep-temp                      Keep temporary files"
+      puts "  --debug                          Enable debug mode"
+      puts ""
+      puts "Output:"
+      puts "  - Frames are saved as: FR001_filename.png, FR002_filename.png, etc."
+      puts "  - Frame naming uses 3-digit zero-padded format (FR001-FR999)"
+      puts "  - Output directory: filename_frames/ (unless --output specified)"
+      puts ""
+      puts "Examples:"
+      puts "  ruby_spriter --image sprite.png --split 4:4"
+      puts "  ruby_spriter --image sprite.png --split 8:8 --override-md"
+      puts "  ruby_spriter --image sprite.png --split 2:5 --output frames/"
+      puts ""
+      exit
     end
   end
 end

@@ -77,6 +77,21 @@ RSpec.describe RubySpriter::CLI do
           expect { described_class.start(['-h']) }.to output(/Usage: ruby_spriter/).to_stdout
         end.to raise_error(SystemExit)
       end
+
+      it 'shows mode-specific help hints' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Get mode-specific help:')
+      end
     end
 
     describe '--version flag' do
@@ -675,6 +690,83 @@ RSpec.describe RubySpriter::CLI do
 
   describe '--video flag' do
     let(:fixture_video) { File.join(__dir__, '..', 'fixtures', 'test_video.mp4') }
+
+    describe 'context-sensitive help' do
+      it 'shows video mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--video', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Video Mode')
+      end
+
+      it 'shows image mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--image', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Image Mode')
+      end
+
+      it 'shows consolidate mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--consolidate', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Consolidate Mode')
+      end
+
+      it 'shows batch mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--batch', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Batch Mode')
+      end
+
+      it 'shows split mode help with --help' do
+        output = StringIO.new
+        $stdout = output
+
+        begin
+          described_class.start(['--split', '--help'])
+        rescue SystemExit
+          # Expected
+        ensure
+          $stdout = STDOUT
+        end
+
+        expect(output.string).to include('Split Mode')
+      end
+    end
 
     describe 'argument parsing' do
       it 'sets video option with --video flag' do

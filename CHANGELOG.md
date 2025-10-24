@@ -37,19 +37,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Requires at least 2 valid spritesheets in directory
   - Works with all existing consolidation options: `--output`, `--outputdir`, `--overwrite`, `--max-compress`, `--no-validate-columns`
   - Mutual exclusivity validation: Cannot use both comma-separated file list and `--dir` with `--consolidate`
+- **Enhanced Context-Sensitive Help System**: Mode-specific help displays only relevant options
+  - `ruby_spriter --video --help`: Shows video mode options (spritesheet generation, processing, output)
+  - `ruby_spriter --image --help`: Shows image mode options (processing, frame extraction, output)
+  - `ruby_spriter --consolidate --help`: Shows consolidation options (input methods, validation, output)
+  - `ruby_spriter --batch --help`: Shows batch processing options (directory processing, applied options)
+  - `ruby_spriter --split --help`: Shows frame extraction options (split format, metadata behavior, output)
+  - General `--help`: Shows mode-specific help hints and directs users to detailed help
+  - Organized by function (Processing Options, Output Options) instead of by tool (GIMP Processing Options)
 - **New Modules**:
   - `BatchProcessor` (lib/ruby_spriter/batch_processor.rb): Orchestrates batch video processing
   - `CompressionManager` (lib/ruby_spriter/compression_manager.rb): Handles PNG compression with metadata preservation
 - **New Public Method**: `Consolidator#find_spritesheets_in_directory(directory)` for directory scanning
-- **Comprehensive Test Coverage**: 39 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation)
+- **Comprehensive Test Coverage**: 45 new tests (13 for BatchProcessor, 11 for CompressionManager, 15 for directory consolidation, 6 for context-sensitive help)
 
 #### Changed
 - **CLI**: Updated `--consolidate` description to mention `--dir` option
+- **CLI**: Renamed "GIMP Processing Options" to "Processing Options" for tool-agnostic organization
 - **Processor**: Refactored consolidation workflow to support both file list and directory modes
-- **Test Suite**: Increased from 274 to 313 examples (all passing), 74.29% line coverage
+- **Test Suite**: Increased from 274 to 319 examples (all passing), 78.84% line coverage
 
 #### Examples
 ```bash
+# Get context-sensitive help for specific modes
+ruby_spriter --video --help
+ruby_spriter --image --help
+ruby_spriter --consolidate --help
+ruby_spriter --batch --help
+ruby_spriter --split --help
+
 # Process all videos in directory
 ruby_spriter --batch --dir "videos/"
 
