@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.5
+# Ruby Spriter v0.6.6
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,6 +18,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 🎨 **Quality Enhancement** - 5 interpolation methods and configurable unsharp masking
 - 📐 **Spritesheet Consolidation** - Merge multiple spritesheets vertically
 - 📊 **Metadata Management** - Embed and verify grid information in PNG files
+- 🔒 **Automatic File Protection** - Unique timestamped filenames prevent accidental overwrites (v0.6.6+)
 - 🌍 **Cross-Platform** - Works seamlessly on Windows, Linux, and macOS
 - 🧪 **Production Ready** - Comprehensive RSpec test coverage
 
@@ -134,7 +135,7 @@ bundle install
 
 # Build and install gem locally
 gem build ruby_spriter.gemspec
-gem install ruby_spriter-0.6.5.gem
+gem install ruby_spriter-0.6.6.gem
 ```
 
 **Best for**: Contributors, developers wanting latest code
@@ -286,6 +287,7 @@ ruby_spriter --consolidate file1.png,file2.png,file3.png \
 
 #### **Other Options**
 ```bash
+    --overwrite               Overwrite existing output files (default: create unique filenames)
     --keep-temp               Keep temporary files for debugging
     --debug                   Enable verbose output + keep temp files
     --check-dependencies      Check if all required external tools are installed
@@ -339,6 +341,42 @@ ruby_spriter --image 4k_sprite.png \
 ---
 
 ## 🔧 Advanced Features
+
+### File Protection with Unique Filenames (v0.6.6+)
+
+By default, Ruby Spriter protects your existing files by generating unique timestamped filenames when output files already exist:
+
+```bash
+# First run - creates new file
+ruby_spriter --image sprite.png --remove-bg
+# Output: sprite-nobg-fuzzy.png
+
+# Second run - creates unique file instead of overwriting
+ruby_spriter --image sprite.png --remove-bg
+# Output: sprite-nobg-fuzzy_20251023_170542_123.png
+
+# Third run - another unique file
+ruby_spriter --image sprite.png --remove-bg
+# Output: sprite-nobg-fuzzy_20251023_170545_456.png
+```
+
+#### Overwrite Mode
+
+Use `--overwrite` to replace existing files instead:
+
+```bash
+# Always overwrites sprite-nobg-fuzzy.png
+ruby_spriter --image sprite.png --remove-bg --overwrite
+```
+
+#### Behavior by Mode
+
+| Mode | Default Filename | Unique on Collision |
+|------|------------------|---------------------|
+| `--video` | `input_spritesheet.png` | ✅ Yes |
+| `--image` (with processing) | `input-scaled-50pct.png` | ✅ Yes |
+| `--consolidate` | `consolidated_spritesheet.png` | ✅ Yes |
+| Any with `--output` | Your specified name | ✅ Yes (unless `--overwrite`) |
 
 ### Metadata Management
 

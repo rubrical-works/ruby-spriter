@@ -208,6 +208,10 @@ module RubySpriter
     def add_other_options(opts, options)
       opts.separator "Other Options:"
 
+      opts.on("--overwrite", "Overwrite existing output files (default: create unique filenames)") do
+        options[:overwrite] = true
+      end
+
       opts.on("--keep-temp", "Keep temporary files for debugging") do
         options[:keep_temp] = true
       end

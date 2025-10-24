@@ -68,7 +68,8 @@ module RubySpriter
 
     def scale_image(input_file)
       percent = options[:scale_percent]
-      output_file = Utils::FileHelper.output_filename(input_file, "scaled-#{percent}pct")
+      desired_output = Utils::FileHelper.output_filename(input_file, "scaled-#{percent}pct")
+      output_file = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
       Utils::OutputFormatter.indent("Scaling to #{percent}%...")
 
@@ -85,7 +86,8 @@ module RubySpriter
 
     def remove_background(input_file)
       method = options[:fuzzy_select] ? 'fuzzy' : 'global'
-      output_file = Utils::FileHelper.output_filename(input_file, "nobg-#{method}")
+      desired_output = Utils::FileHelper.output_filename(input_file, "nobg-#{method}")
+      output_file = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
       Utils::OutputFormatter.indent("Removing background (#{method} select)...")
 
@@ -621,7 +623,8 @@ module RubySpriter
       gain = options[:sharpen_gain] || 0.5
       threshold = options[:sharpen_threshold] || 0.03
 
-      output_file = Utils::FileHelper.output_filename(input_file, "sharpened")
+      desired_output = Utils::FileHelper.output_filename(input_file, "sharpened")
+      output_file = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
       Utils::OutputFormatter.indent("Applying unsharp mask (ImageMagick)...")
       Utils::OutputFormatter.indent("  radius=#{radius}, gain=#{gain}, threshold=#{threshold}")

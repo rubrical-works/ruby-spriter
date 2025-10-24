@@ -155,6 +155,32 @@ RSpec.describe RubySpriter::CLI do
         end.to raise_error(SystemExit)
       end
     end
+
+    describe '--overwrite flag' do
+      it 'sets overwrite option to true' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--video', 'test.mp4', '--overwrite'])
+      end
+
+      it 'defaults to false when not specified' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:overwrite]).to be_nil
+          processor_double
+        end
+
+        described_class.start(['--video', 'test.mp4'])
+      end
+    end
   end
 
   describe '--image flag' do
@@ -424,6 +450,225 @@ RSpec.describe RubySpriter::CLI do
         end
 
         described_class.start(['--image', fixture_with_meta, '--output', 'custom_output.png'])
+      end
+
+      it 'works with --overwrite option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:image]).to eq(fixture_with_meta)
+          expect(options[:remove_bg]).to eq(true)
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', fixture_with_meta, '--remove-bg', '--overwrite'])
+      end
+
+      it 'works with --overwrite and --output options combined' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:image]).to eq(fixture_with_meta)
+          expect(options[:scale_percent]).to eq(50)
+          expect(options[:output]).to eq('custom.png')
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', fixture_with_meta, '--scale', '50', '--output', 'custom.png', '--overwrite'])
+      end
+    end
+
+    describe 'output filename behavior with processing' do
+      it 'generates unique filename by default when processing without --output' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock GimpProcessor to return a processed file
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('input-nobg-fuzzy_20251023_123456_789.png')
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          remove_bg: true,
+          overwrite: false
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+        allow(processor).to receive(:gimp_path).and_return('/usr/bin/gimp')
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return the uniquely-named file from GIMP processing
+        expect(result[:output_file]).to match(/-nobg-fuzzy.*\.png$/)
+      end
+
+      it 'overwrites output file when --overwrite is specified' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock GimpProcessor - with overwrite:true, it should return same filename
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('input-scaled-50pct.png')
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          scale_percent: 50,
+          overwrite: true
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+        allow(processor).to receive(:gimp_path).and_return('/usr/bin/gimp')
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return the base filename (no timestamp)
+        expect(result[:output_file]).to eq('input-scaled-50pct.png')
+      end
+
+      it 'generates unique output filename when --output is used without --overwrite' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock ensure_unique_output to verify it's called correctly
+        allow(RubySpriter::Utils::FileHelper).to receive(:ensure_unique_output) do |path, overwrite:|
+          expect(path).to eq('custom_output.png')
+          expect(overwrite).to eq(false)
+          'custom_output_20251023_123456_789.png'
+        end
+
+        # Mock GimpProcessor
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('temp-processed.png')
+
+        # Mock file operations
+        allow(FileUtils).to receive(:cp)
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          remove_bg: true,
+          output: 'custom_output.png',
+          overwrite: false
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+        allow(processor).to receive(:gimp_path).and_return('/usr/bin/gimp')
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return unique filename
+        expect(result[:output_file]).to match(/custom_output_\d{8}_\d{6}_\d{3}\.png$/)
+      end
+
+      it 'uses exact output filename when --output and --overwrite are both specified' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock ensure_unique_output to verify it's called with overwrite:true
+        allow(RubySpriter::Utils::FileHelper).to receive(:ensure_unique_output) do |path, overwrite:|
+          expect(path).to eq('exact_output.png')
+          expect(overwrite).to eq(true)
+          'exact_output.png'
+        end
+
+        # Mock GimpProcessor
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('temp-processed.png')
+
+        # Mock file operations
+        allow(FileUtils).to receive(:cp)
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          scale_percent: 50,
+          output: 'exact_output.png',
+          overwrite: true
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+        allow(processor).to receive(:gimp_path).and_return('/usr/bin/gimp')
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return exact filename (no timestamp)
+        expect(result[:output_file]).to eq('exact_output.png')
+      end
+
+      it 'generates unique filename when using --sharpen alone without --output' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock GimpProcessor to return a sharpened file
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('input-sharpened_20251023_123456_789.png')
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          sharpen: true,
+          overwrite: false
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return the uniquely-named sharpened file
+        expect(result[:output_file]).to match(/-sharpened.*\.png$/)
+      end
+
+      it 'overwrites sharpened file when --sharpen with --overwrite' do
+        # Mock all dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+        # Mock GimpProcessor - with overwrite:true, should return base filename
+        gimp_double = instance_double(RubySpriter::GimpProcessor)
+        allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_double)
+        allow(gimp_double).to receive(:process).and_return('input-sharpened.png')
+
+        processor = RubySpriter::Processor.new(
+          image: fixture_with_meta,
+          sharpen: true,
+          overwrite: true
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+
+        result = nil
+        expect { result = processor.run }.to output(/SUCCESS/).to_stdout
+
+        # Should return the base filename (no timestamp)
+        expect(result[:output_file]).to eq('input-sharpened.png')
       end
     end
   end
@@ -1116,6 +1361,83 @@ RSpec.describe RubySpriter::CLI do
           '--output', 'combined.png',
           '--debug'
         ])
+      end
+
+      it 'works with --overwrite option' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:consolidate]).to eq([spritesheet_4x2, spritesheet_6x2])
+          expect(options[:overwrite]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--consolidate', "#{spritesheet_4x2},#{spritesheet_6x2}", '--overwrite'])
+      end
+    end
+
+    describe 'default output filename behavior' do
+      it 'generates consolidated_spritesheet.png when no --output specified' do
+        # Mock all the dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:ensure_unique_output) do |path, overwrite:|
+          expect(path).to eq('consolidated_spritesheet.png')
+          expect(overwrite).to eq(false)
+          'consolidated_spritesheet.png'
+        end
+
+        consolidator_double = instance_double(RubySpriter::Consolidator)
+        allow(RubySpriter::Consolidator).to receive(:new).and_return(consolidator_double)
+        allow(consolidator_double).to receive(:consolidate).and_return({
+          output_file: 'consolidated_spritesheet.png',
+          columns: 2,
+          rows: 4,
+          frames: 8
+        })
+
+        processor = RubySpriter::Processor.new(
+          consolidate: [spritesheet_4x2, spritesheet_6x2],
+          overwrite: false
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+
+        # Capture output to suppress console messages
+        expect { processor.run }.to output(/SUCCESS/).to_stdout
+      end
+
+      it 'respects --overwrite flag with default filename' do
+        # Mock all the dependencies
+        allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+        allow(RubySpriter::Utils::FileHelper).to receive(:ensure_unique_output) do |path, overwrite:|
+          expect(path).to eq('consolidated_spritesheet.png')
+          expect(overwrite).to eq(true)
+          'consolidated_spritesheet.png'
+        end
+
+        consolidator_double = instance_double(RubySpriter::Consolidator)
+        allow(RubySpriter::Consolidator).to receive(:new).and_return(consolidator_double)
+        allow(consolidator_double).to receive(:consolidate).and_return({
+          output_file: 'consolidated_spritesheet.png',
+          columns: 2,
+          rows: 4,
+          frames: 8
+        })
+
+        processor = RubySpriter::Processor.new(
+          consolidate: [spritesheet_4x2, spritesheet_6x2],
+          overwrite: true
+        )
+
+        allow(processor).to receive(:check_dependencies!)
+        allow(processor).to receive(:setup_temp_directory)
+        allow(processor).to receive(:cleanup)
+
+        # Capture output to suppress console messages
+        expect { processor.run }.to output(/SUCCESS/).to_stdout
       end
     end
   end

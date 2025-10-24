@@ -54,7 +54,8 @@ module RubySpriter
         validate_columns: true,
         temp_dir: nil,
         keep_temp: false,
-        debug: false
+        debug: false,
+        overwrite: false
       }
     end
 
@@ -119,8 +120,8 @@ module RubySpriter
         missing << tool unless results[tool][:available]
       end
 
-      # GIMP only needed for image processing
-      if needs_gimp? && !results[:gimp][:available]
+      # GIMP only needed for scaling and background removal (not for sharpen-only)
+      if needs_gimp_specifically? && !results[:gimp][:available]
         missing << :gimp
       end
 
@@ -137,6 +138,10 @@ module RubySpriter
     end
 
     def needs_gimp?
+      options[:scale_percent] || options[:remove_bg] || options[:sharpen]
+    end
+
+    def needs_gimp_specifically?
       options[:scale_percent] || options[:remove_bg]
     end
 
@@ -168,24 +173,28 @@ module RubySpriter
     end
 
     def execute_video_workflow
-      # Step 1: Convert video to spritesheet
+      # Step 1: Determine output filename
+      desired_output = options[:output] || Utils::FileHelper.spritesheet_filename(options[:video])
+      final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
+
+      # Step 2: Convert video to spritesheet
       video_processor = VideoProcessor.new(options)
       result = video_processor.create_spritesheet(
         options[:video],
-        options[:output] || Utils::FileHelper.spritesheet_filename(options[:video])
+        final_output
       )
 
       working_file = result[:output_file]
 
-      # Step 2: Apply GIMP processing if requested
+      # Step 3: Apply GIMP processing if requested
       if needs_gimp?
         working_file = process_with_gimp(working_file)
       end
 
-      # Step 3: Move to final output location if different
-      if options[:output] && working_file != options[:output]
-        FileUtils.cp(working_file, options[:output])
-        working_file = options[:output]
+      # Step 4: Move to final output location if different
+      if final_output != working_file
+        FileUtils.cp(working_file, final_output)
+        working_file = final_output
       end
 
       Utils::OutputFormatter.header("SUCCESS!")
@@ -197,15 +206,18 @@ module RubySpriter
     def execute_image_workflow
       working_file = options[:image]
 
-      # Apply GIMP processing if requested
+      # Apply GIMP processing if requested (GimpProcessor handles uniqueness)
       if needs_gimp?
         working_file = process_with_gimp(working_file)
       end
 
-      # Move to final output location if specified
-      if options[:output] && working_file != options[:output]
-        FileUtils.cp(working_file, options[:output])
-        working_file = options[:output]
+      # Move to final output location if user specified explicit --output
+      if options[:output]
+        final_output = Utils::FileHelper.ensure_unique_output(options[:output], overwrite: options[:overwrite])
+        if working_file != final_output
+          FileUtils.cp(working_file, final_output)
+          working_file = final_output
+        end
       end
 
       Utils::OutputFormatter.header("SUCCESS!")
@@ -220,10 +232,11 @@ module RubySpriter
 
     def execute_consolidate_workflow
       consolidator = Consolidator.new(options)
-      
-      output_file = options[:output] || generate_consolidated_filename
-      
-      result = consolidator.consolidate(options[:consolidate], output_file)
+
+      desired_output = options[:output] || generate_consolidated_filename
+      final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
+
+      result = consolidator.consolidate(options[:consolidate], final_output)
 
       Utils::OutputFormatter.header("SUCCESS!")
       Utils::OutputFormatter.success("Final output: #{result[:output_file]}")
@@ -237,8 +250,7 @@ module RubySpriter
     end
 
     def generate_consolidated_filename
-      timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-      "consolidated_spritesheet_#{timestamp}.png"
+      "consolidated_spritesheet.png"
     end
 
     def cleanup

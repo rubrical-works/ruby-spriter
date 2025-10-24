@@ -12,6 +12,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.6] - 2025-10-23
+
+### 🔒 File Protection & Safety Release
+
+#### Added
+- **Automatic Unique Filenames**: By default, generates timestamped filenames to prevent accidental overwrites
+  - Format: `filename_YYYYMMDD_HHMMSS_mmm.ext` (includes milliseconds)
+  - Applies to all output modes: `--video`, `--image`, `--consolidate`
+  - Works with both auto-generated and `--output` specified filenames
+- **`--overwrite` Flag**: Optional flag to explicitly allow overwriting existing files
+- **File Protection Tests**: 19 new comprehensive tests for filename uniqueness and overwrite behavior
+  - CLI integration tests for `--overwrite` flag
+  - Output filename behavior tests for all modes
+  - FileHelper utility tests for unique filename generation
+
+#### Changed
+- **Default Behavior**: Changed from overwriting to creating unique files (breaking change, but safer)
+- **GimpProcessor**: Now respects `--overwrite` flag for scaled and background-removed images
+- **Consolidate Workflow**: Default filename changed from `consolidated_spritesheet_TIMESTAMP.png` to `consolidated_spritesheet.png` (uniqueness handled by flag)
+
+#### Technical Details
+- New utility methods in `Utils::FileHelper`:
+  - `unique_filename(path)` - Generates timestamped filename if file exists
+  - `ensure_unique_output(path, overwrite:)` - Applies overwrite logic
+- Processor workflows updated to use `ensure_unique_output` for all output paths
+- Test coverage increased to 61.8% (500/809 lines)
+
+Closes #17
+
+---
+
 ## [0.6.5] - 2025-10-23
 
 ### 📦 Distribution & Packaging Release
