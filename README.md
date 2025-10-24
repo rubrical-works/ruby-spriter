@@ -93,19 +93,82 @@ Ruby Spriter requires these external tools for video and image processing:
 
 #### Installing Prerequisites
 
-**Windows (Chocolatey)**
-```powershell
-choco install ffmpeg imagemagick gimp -y
-```
+**Windows (Chocolatey - Recommended)**
+
+Chocolatey is a package manager for Windows that simplifies software installation. If you don't have Chocolatey installed:
+
+1. **Install Chocolatey** (run PowerShell as Administrator):
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+   ```
+
+   Verify installation:
+   ```powershell
+   choco --version
+   ```
+
+2. **Install Ruby** (if not already installed):
+   ```powershell
+   choco install ruby -y
+   ```
+
+   Close and reopen PowerShell, then verify:
+   ```powershell
+   ruby --version
+   gem --version
+   ```
+
+3. **Install Ruby Spriter dependencies**:
+   ```powershell
+   choco install ffmpeg imagemagick gimp -y
+   ```
+
+   This installs all required tools:
+   - **FFmpeg** - Video processing
+   - **ImageMagick** - Image manipulation and metadata
+   - **GIMP** - Advanced image processing
+
+4. **Restart your terminal** to ensure all tools are in your PATH
+
+**Alternative: Manual Installation on Windows**
+
+If you prefer not to use Chocolatey:
+- **Ruby**: Download from [rubyinstaller.org](https://rubyinstaller.org/)
+- **FFmpeg**: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+- **ImageMagick**: Download from [imagemagick.org](https://imagemagick.org/script/download.php#windows)
+- **GIMP**: Download from [gimp.org](https://www.gimp.org/downloads/)
 
 **macOS (Homebrew)**
+
 ```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Ruby (if not already installed)
+brew install ruby
+
+# Install Ruby Spriter dependencies
 brew install ffmpeg imagemagick gimp
 ```
 
 **Linux (Ubuntu/Debian)**
+
 ```bash
-sudo apt update && sudo apt install ffmpeg imagemagick gimp -y
+# Install Ruby (if not already installed)
+sudo apt update && sudo apt install ruby-full -y
+
+# Install Ruby Spriter dependencies
+sudo apt install ffmpeg imagemagick gimp -y
+```
+
+**Linux (Fedora/RHEL)**
+
+```bash
+# Install Ruby (if not already installed)
+sudo dnf install ruby -y
+
+# Install Ruby Spriter dependencies
+sudo dnf install ffmpeg imagemagick gimp -y
 ```
 
 ---
