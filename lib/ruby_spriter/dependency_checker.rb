@@ -32,12 +32,23 @@ module RubySpriter
           linux: 'sudo apt install imagemagick',
           macos: 'brew install imagemagick'
         }
+      },
+      xvfb: {
+        command: 'xvfb-run --help',
+        pattern: /xvfb-run/i,
+        install: {
+          windows: 'Not required on Windows',
+          linux: 'sudo apt install xvfb',
+          macos: 'Not required on macOS'
+        },
+        optional_for: [:windows, :macos]  # Only required on Linux
       }
     }.freeze
 
     def initialize(verbose: false)
       @verbose = verbose
       @gimp_path = nil
+      @gimp_version = nil
     end
 
     # Check all dependencies
@@ -58,7 +69,7 @@ module RubySpriter
     # @return [Boolean] true if all dependencies are available
     def all_satisfied?
       results = check_all
-      results.all? { |_tool, status| status[:available] }
+      results.all? { |tool, status| status[:available] || status[:optional] }
     end
 
     # Print dependency status report
@@ -70,14 +81,31 @@ module RubySpriter
       puts "=" * 60
       
       results.each do |tool, status|
-        icon = status[:available] ? "✅" : "❌"
-        puts "\n#{icon} #{tool.to_s.upcase}"
-        
-        if status[:available]
-          puts "   Found: #{status[:path] || status[:version]}"
+        if status[:optional] && !status[:available]
+          icon = "⚪"
+          optional_text = " (Optional for #{Platform.current})"
         else
-          puts "   Status: NOT FOUND"
-          puts "   Install: #{status[:install_cmd]}"
+          icon = status[:available] ? "✅" : "❌"
+          optional_text = ""
+        end
+
+        puts "\n#{icon} #{tool.to_s.upcase}#{optional_text}"
+
+        if status[:available]
+          if tool == :gimp && status[:version]
+            version_str = "GIMP #{status[:version][:full]}"
+            puts "   Found: #{status[:path]}"
+            puts "   Version: #{version_str}"
+          else
+            puts "   Found: #{status[:path] || status[:version]}"
+          end
+        else
+          if status[:optional]
+            puts "   Status: NOT FOUND (not required for this platform)"
+          else
+            puts "   Status: NOT FOUND"
+            puts "   Install: #{status[:install_cmd]}"
+          end
         end
       end
       
@@ -87,9 +115,16 @@ module RubySpriter
     # Get the found GIMP executable path
     attr_reader :gimp_path
 
+    # Get the detected GIMP version info
+    attr_reader :gimp_version
+
     private
 
     def check_tool(tool, config)
+      # Check if this tool is optional for current platform
+      optional_platforms = config[:optional_for] || []
+      is_optional = optional_platforms.include?(Platform.current)
+
       stdout, stderr, status = Open3.capture3(config[:command])
       output = stdout + stderr
 
@@ -98,13 +133,15 @@ module RubySpriter
         {
           available: true,
           version: version,
-          install_cmd: nil
+          install_cmd: nil,
+          optional: is_optional
         }
       else
         {
           available: false,
           version: nil,
-          install_cmd: config[:install][Platform.current]
+          install_cmd: config[:install][Platform.current],
+          optional: is_optional
         }
       end
     rescue StandardError => e
@@ -112,7 +149,8 @@ module RubySpriter
       {
         available: false,
         version: nil,
-        install_cmd: config[:install][Platform.current]
+        install_cmd: config[:install][Platform.current],
+        optional: is_optional
       }
     end
 
@@ -121,32 +159,44 @@ module RubySpriter
       default_path = Platform.default_gimp_path
       if gimp_exists?(default_path)
         @gimp_path = default_path
-        return gimp_status(true, default_path)
+        @gimp_version = Platform.get_gimp_version(default_path)
+        return gimp_status(true, default_path, @gimp_version)
       end
 
       # Try alternative paths
       Platform.alternative_gimp_paths.each do |path|
         if gimp_exists?(path)
           @gimp_path = path
-          return gimp_status(true, path)
+          @gimp_version = Platform.get_gimp_version(path)
+          return gimp_status(true, path, @gimp_version)
         end
       end
 
       # Not found
-      gimp_status(false, nil)
+      gimp_status(false, nil, nil)
     end
 
     def gimp_exists?(path)
       return false if path.nil? || path.empty?
+
+      # Handle Flatpak GIMP
+      if path.start_with?('flatpak:')
+        flatpak_app = path.sub('flatpak:', '')
+        stdout, _stderr, status = Open3.capture3("flatpak list --app | grep #{flatpak_app}")
+        return status.success? && !stdout.strip.empty?
+      end
+
       File.exist?(path)
     end
 
-    def gimp_status(available, path)
-      {
+    def gimp_status(available, path, version)
+      status = {
         available: available,
         path: path,
         install_cmd: gimp_install_command
       }
+      status[:version] = version if version
+      status
     end
 
     def gimp_install_command

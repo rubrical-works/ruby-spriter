@@ -6,11 +6,12 @@ require 'tmpdir'
 module RubySpriter
   # Processes images with GIMP
   class GimpProcessor
-    attr_reader :options, :gimp_path
+    attr_reader :options, :gimp_path, :gimp_version
 
     def initialize(gimp_path, options = {})
       @gimp_path = gimp_path
       @options = options
+      @gimp_version = options[:gimp_version] || { major: 3, minor: 0 }  # Default to GIMP 3
     end
 
     # Process image with GIMP operations
@@ -20,6 +21,11 @@ module RubySpriter
       Utils::FileHelper.validate_readable!(input_file)
 
       Utils::OutputFormatter.header("GIMP Processing")
+
+      # Inform about Xvfb usage on Linux
+      if Platform.linux? && gimp_path.start_with?('flatpak:')
+        Utils::OutputFormatter.note("Using GIMP via Xvfb (virtual display)")
+      end
 
       # Inform user if automatic operation order optimization is applied
       if options[:scale_percent] && options[:remove_bg] &&
@@ -44,6 +50,18 @@ module RubySpriter
     end
 
     private
+
+    def gimp_major_version
+      @gimp_version[:major]
+    end
+
+    def gimp2?
+      gimp_major_version == 2
+    end
+
+    def gimp3?
+      gimp_major_version == 3
+    end
 
     def determine_operations
       ops = []
@@ -101,6 +119,14 @@ module RubySpriter
     end
 
     def generate_scale_script(input_file, output_file, percent)
+      if gimp2?
+        generate_scale_script_gimp2(input_file, output_file, percent)
+      else
+        generate_scale_script_gimp3(input_file, output_file, percent)
+      end
+    end
+
+    def generate_scale_script_gimp3(input_file, output_file, percent)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
       interpolation = map_interpolation_method(options[:scale_interpolation] || 'nohalo')
@@ -216,7 +242,75 @@ module RubySpriter
       PYTHON
     end
 
+    def generate_scale_script_gimp2(input_file, output_file, percent)
+      input_path = Utils::PathHelper.normalize_for_python(input_file)
+      output_path = Utils::PathHelper.normalize_for_python(output_file)
+      interpolation = map_interpolation_method_gimp2(options[:scale_interpolation] || 'nohalo')
+
+      <<~PYTHON
+        from gimpfu import *
+        import sys
+
+        def scale_image():
+            try:
+                print "Loading image..."
+                img = pdb.gimp_file_load(r'#{input_path}', r'#{input_path}')
+
+                w = img.width
+                h = img.height
+                print "Image size: %dx%d" % (w, h)
+
+                if len(img.layers) == 0:
+                    raise Exception("No layers found")
+                layer = img.layers[0]
+
+                # Calculate new dimensions
+                new_width = int(w * #{percent} / 100.0)
+                new_height = int(h * #{percent} / 100.0)
+                print "Scaling to: %dx%d" % (new_width, new_height)
+                print "Interpolation: #{interpolation}"
+
+                # Scale layer with interpolation
+                pdb.gimp_layer_scale(layer, new_width, new_height, False, #{interpolation})
+                print "Layer scaled with interpolation"
+
+                # Resize canvas to match layer
+                pdb.gimp_image_resize(img, new_width, new_height, 0, 0)
+                print "Canvas resized"
+
+                # Handle multiple layers while preserving alpha
+                if len(img.layers) > 1:
+                    pdb.gimp_image_merge_visible_layers(img, EXPAND_AS_NECESSARY)
+                    print "Multiple layers merged (alpha preserved)"
+                else:
+                    print "Single layer - no merge needed, alpha preserved"
+
+                # Export with alpha channel intact
+                print "Exporting with alpha channel..."
+                pdb.file_png_save(img, img.layers[0], r'#{output_path}', r'#{output_path}',
+                                  0, 9, 0, 0, 0, 0, 0)
+
+                print "SUCCESS - Image scaled!"
+
+            except Exception as e:
+                print "ERROR: %s" % str(e)
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+
+        scale_image()
+      PYTHON
+    end
+
     def generate_remove_bg_script(input_file, output_file)
+      if gimp2?
+        generate_remove_bg_script_gimp2(input_file, output_file)
+      else
+        generate_remove_bg_script_gimp3(input_file, output_file)
+      end
+    end
+
+    def generate_remove_bg_script_gimp3(input_file, output_file)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
 
@@ -325,6 +419,98 @@ module RubySpriter
             except Exception as cleanup_error:
                 print(f"Cleanup warning: {cleanup_error}")
                 pass
+      PYTHON
+    end
+
+    def generate_remove_bg_script_gimp2(input_file, output_file)
+      input_path = Utils::PathHelper.normalize_for_python(input_file)
+      output_path = Utils::PathHelper.normalize_for_python(output_file)
+
+      use_fuzzy = options[:fuzzy_select]
+      grow = options[:grow_selection] || 1
+      feather = options[:bg_threshold] || 0.0
+
+      # Build selection method
+      if use_fuzzy
+        select_method = "CHANNEL_OP_REPLACE" # First corner
+        select_add = "CHANNEL_OP_ADD"        # Additional corners
+        select_call = "pdb.gimp_image_select_contiguous_color(img, select_op, layer, x, y)"
+      else
+        select_method = "CHANNEL_OP_REPLACE"
+        select_add = "CHANNEL_OP_ADD"
+        select_call = "pdb.gimp_image_select_color(img, select_op, layer, color)"
+      end
+
+      <<~PYTHON
+        from gimpfu import *
+        import sys
+
+        def remove_background():
+            try:
+                print "Loading image..."
+                img = pdb.gimp_file_load(r'#{input_path}', r'#{input_path}')
+
+                w = img.width
+                h = img.height
+                print "Image size: %dx%d" % (w, h)
+
+                if len(img.layers) == 0:
+                    raise Exception("No layers found")
+                layer = img.layers[0]
+
+                # Add alpha channel if needed
+                if not pdb.gimp_layer_has_alpha(layer):
+                    pdb.gimp_layer_add_alpha(layer)
+                    print "Added alpha channel"
+
+                # Sample all four corners
+                corners = [
+                    (0, 0),           # Top-left
+                    (w-1, 0),         # Top-right
+                    (0, h-1),         # Bottom-left
+                    (w-1, h-1)        # Bottom-right
+                ]
+
+                print "Sampling %d corners..." % len(corners)
+                #{"print \"Using FUZZY SELECT (contiguous regions only)\"" if use_fuzzy}
+                #{"print \"Using GLOBAL COLOR SELECT (all matching pixels)\"" unless use_fuzzy}
+
+                for i, (x, y) in enumerate(corners):
+                    print "  Corner %d at (%d, %d)" % (i+1, x, y)
+                    select_op = CHANNEL_OP_REPLACE if i == 0 else CHANNEL_OP_ADD
+                    #{use_fuzzy ? "pdb.gimp_image_select_contiguous_color(img, select_op, layer, x, y)" : "color = pdb.gimp_image_get_pixel_color(img, layer, x, y)[1]\n                    pdb.gimp_image_select_color(img, select_op, layer, color)"}
+
+                print "Selection complete"
+
+                # Grow selection if configured
+                #{grow > 0 ? "print \"Growing selection by #{grow} pixels...\"\n                pdb.gimp_selection_grow(img, #{grow})\n                print \"Selection grown\"" : "# No selection growth"}
+
+                # Feather selection if configured
+                #{feather > 0 ? "print \"Feathering selection by #{feather} pixels...\"\n                pdb.gimp_selection_feather(img, #{feather})\n                print \"Selection feathered\"" : "# No feathering"}
+
+                # Delete selection (clear background)
+                print "Removing background..."
+                pdb.gimp_edit_clear(layer)
+                print "Background removed"
+
+                # Deselect
+                print "Deselecting..."
+                pdb.gimp_selection_none(img)
+
+                # Export
+                print "Exporting..."
+                pdb.file_png_save(img, layer, r'#{output_path}', r'#{output_path}',
+                                  0, 9, 0, 0, 0, 0, 0)
+
+                print "SUCCESS - Background removed!"
+
+            except Exception as e:
+                print "ERROR: %s" % str(e)
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+
+        remove_background()
       PYTHON
     end
 
@@ -468,7 +654,7 @@ module RubySpriter
         @echo off
         REM Suppress GEGL debug output (known GIMP 3.x batch mode issue)
         set GEGL_DEBUG=
-        "#{gimp_path}" --quit --batch-interpreter=python-fu-eval -b "exec(open(r'#{script_file}').read())" > "#{log_file}" 2>&1
+        "#{gimp_path}" --no-splash --quit --batch-interpreter=python-fu-eval -b "exec(open(r'#{script_file}').read())" > "#{log_file}" 2>&1
         exit /b %errorlevel%
       BATCH
 
@@ -502,7 +688,25 @@ module RubySpriter
 
     # Unix execution (Linux/macOS)
     def execute_gimp_unix(script_file, log_file)
-      cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+      # Check if we're using Flatpak GIMP (needs xvfb-run)
+      use_xvfb = gimp_path.start_with?('flatpak:')
+
+      if gimp2?
+        # GIMP 2.x: Use gimp-console for batch processing
+        gimp_console_path = gimp_path.sub('/gimp', '/gimp-console')
+        cmd = "#{Utils::PathHelper.quote_path(gimp_console_path)} -i --no-splash --batch-interpreter python-fu-eval -b 'exec(open(\"#{script_file}\").read())' -b '(gimp-quit 0)' > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+      else
+        # GIMP 3.x command
+        if use_xvfb
+          # Flatpak GIMP needs xvfb-run to provide virtual display
+          # Use --nosocket options to prevent Flatpak from accessing host display
+          flatpak_app = gimp_path.sub('flatpak:', '')
+          cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+        else
+          # Regular GIMP 3.x installation
+          cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+        end
+      end
 
       if options[:debug]
         Utils::OutputFormatter.indent("DEBUG: GIMP command: #{cmd}")
@@ -532,6 +736,16 @@ module RubySpriter
         line.match?(/GeglBuffers leaked/) ||
         line.match?(/EEEEeEeek!/) ||
         line.match?(/batch command executed successfully/) ||
+        # Filter Linux/Wayland/Flatpak cosmetic warnings
+        line.match?(/Gdk-WARNING.*Failed to read portal settings/) ||
+        line.match?(/set device.*to mode: disabled/) ||
+        line.match?(/Gdk-WARNING.*Server is missing xdg_foreign support/) ||
+        line.match?(/gimp_widget_set_handle_on_mapped.*gdk_wayland_window_export_handle/) ||
+        line.match?(/It will not be possible to set windows in other processes/) ||
+        line.match?(/LibGimp-WARNING.*gimp_flush.*Broken pipe/) ||
+        line.match?(/Gimp-Core-WARNING.*gimp_finalize.*list of contexts not empty/) ||
+        line.match?(/stale context:/) ||
+        line.match?(/F: X11 socket.*does not exist in filesystem/) ||
         line.strip.empty?
       end
       lines.join
@@ -598,7 +812,7 @@ module RubySpriter
       end
     end
 
-    # Map interpolation method names to GIMP interpolation type enum values
+    # Map interpolation method names to GIMP 3.x interpolation type enum values
     def map_interpolation_method(method)
       # GIMP 3.x GimpInterpolationType enum values
       case method.to_s.downcase
@@ -615,6 +829,183 @@ module RubySpriter
       else
         'Gimp.InterpolationType.NOHALO'  # Default to NoHalo for quality
       end
+    end
+
+    # Map interpolation method names to GIMP 2.x interpolation type constants
+    def map_interpolation_method_gimp2(method)
+      # GIMP 2.x interpolation constants
+      case method.to_s.downcase
+      when 'none'
+        'INTERPOLATION_NONE'
+      when 'linear'
+        'INTERPOLATION_LINEAR'
+      when 'cubic'
+        'INTERPOLATION_CUBIC'
+      when 'nohalo'
+        'INTERPOLATION_NOHALO'
+      when 'lohalo'
+        'INTERPOLATION_LOHALO'
+      else
+        'INTERPOLATION_NOHALO'  # Default to NoHalo for quality
+      end
+    end
+
+    # Remove background using ImageMagick (fallback for Linux)
+    # Uses edge detection and multiple techniques for better results
+    def remove_background_imagemagick(input_file, output_file)
+      magick_cmd = Platform.imagemagick_convert_cmd
+      identify_cmd = Platform.imagemagick_identify_cmd
+
+      # Get options
+      use_fuzzy = options[:fuzzy_select]
+      fuzz_percent = options[:bg_threshold] || 15.0
+      grow = options[:grow_selection] || 1
+
+      # Get image dimensions
+      stdout, _stderr, status = Open3.capture3("#{identify_cmd} -format '%w %h' #{Utils::PathHelper.quote_path(input_file)}")
+      unless status.success?
+        raise ProcessingError, "Could not get image dimensions"
+      end
+      width, height = stdout.strip.split.map(&:to_i)
+
+      # Sample more points around the border (not just corners)
+      sample_points = [
+        # Corners
+        [0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1],
+        # Mid-edges
+        [width / 2, 0], [width / 2, height - 1],
+        [0, height / 2], [width - 1, height / 2]
+      ]
+
+      # Get colors from all sample points
+      sampled_colors = []
+      sample_points.each do |x, y|
+        color_stdout, _stderr, status = Open3.capture3("#{identify_cmd} -format '%[pixel:p{#{x},#{y}}]' #{Utils::PathHelper.quote_path(input_file)}")
+        sampled_colors << color_stdout.strip if status.success? && !color_stdout.strip.empty?
+      end
+
+      # Find the most common color (likely the background)
+      bg_color = sampled_colors.group_by(&:itself).max_by { |_, v| v.size }.first
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Image size: #{width}x#{height}")
+        Utils::OutputFormatter.indent("DEBUG: Sampled #{sampled_colors.size} border colors")
+        Utils::OutputFormatter.indent("DEBUG: Unique colors: #{sampled_colors.uniq.size}")
+        Utils::OutputFormatter.indent("DEBUG: Using background color: #{bg_color}")
+        Utils::OutputFormatter.indent("DEBUG: Fuzz: #{fuzz_percent}%")
+      end
+
+      # Create a multi-pass approach for better results
+      # Pass 1: Use floodfill from edges with fuzz tolerance
+      temp_file1 = File.join(Dir.tmpdir, "bg_removal_pass1_#{Time.now.to_i}.png")
+
+      draw_commands = sample_points.map { |x, y| "'color #{x},#{y} floodfill'" }.join(' -draw ')
+
+      cmd1 = "#{magick_cmd} #{Utils::PathHelper.quote_path(input_file)} -alpha set -fuzz #{fuzz_percent}% -fill none -draw #{draw_commands} #{temp_file1}"
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Pass 1 - Floodfill from #{sample_points.size} points")
+      end
+
+      stdout, stderr, status = Open3.capture3(cmd1)
+      unless status.success?
+        File.delete(temp_file1) if File.exist?(temp_file1)
+        raise ProcessingError, "Background removal pass 1 failed: #{stderr}"
+      end
+
+      # Pass 2: Remove the detected background color globally with fuzz
+      temp_file2 = File.join(Dir.tmpdir, "bg_removal_pass2_#{Time.now.to_i}.png")
+
+      cmd2 = "#{magick_cmd} #{temp_file1} -fuzz #{fuzz_percent}% -transparent '#{bg_color}' #{temp_file2}"
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Pass 2 - Remove color #{bg_color} globally")
+      end
+
+      stdout, stderr, status = Open3.capture3(cmd2)
+      unless status.success?
+        File.delete(temp_file1) if File.exist?(temp_file1)
+        File.delete(temp_file2) if File.exist?(temp_file2)
+        raise ProcessingError, "Background removal pass 2 failed: #{stderr}"
+      end
+
+      # Pass 3: Minimal cleanup - preserve quality
+      cmd3_parts = [
+        magick_cmd,
+        temp_file2
+      ]
+
+      # Only clean up the alpha channel, don't touch the RGB data
+      # This preserves sprite quality while cleaning edges
+      cmd3_parts += [
+        '-channel', 'A',
+        # Very gentle cleanup - only remove nearly-transparent pixels
+        '-threshold', '5%',  # Anything less than 5% alpha becomes fully transparent
+        '+channel'
+      ]
+
+      # Optionally grow the transparent areas
+      if grow > 0
+        cmd3_parts += ['-morphology', 'Dilate', "Disk:#{grow}"]
+      end
+
+      cmd3_parts << Utils::PathHelper.quote_path(output_file)
+      cmd3 = cmd3_parts.join(' ')
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Pass 3 - Minimal alpha cleanup (quality-preserving)")
+      end
+
+      stdout, stderr, status = Open3.capture3(cmd3)
+
+      # Cleanup temp files
+      File.delete(temp_file1) if File.exist?(temp_file1)
+      File.delete(temp_file2) if File.exist?(temp_file2)
+
+      unless status.success?
+        raise ProcessingError, "Background removal pass 3 failed: #{stderr}"
+      end
+
+      Utils::FileHelper.validate_exists!(output_file)
+      size = Utils::FileHelper.format_size(File.size(output_file))
+      Utils::OutputFormatter.success("Background removal complete (#{size})\n")
+    end
+
+    # Scale image using ImageMagick (fallback for GIMP 2.x)
+    def scale_with_imagemagick(input_file, output_file, percent)
+      magick_cmd = Platform.imagemagick_convert_cmd
+
+      # Map interpolation to ImageMagick filters
+      interpolation = options[:scale_interpolation] || 'nohalo'
+      filter = case interpolation.to_s.downcase
+               when 'none' then 'Point'
+               when 'linear' then 'Triangle'
+               when 'cubic' then 'Catrom'
+               when 'nohalo', 'lohalo' then 'Lanczos'  # Best available quality
+               else 'Lanczos'
+               end
+
+      cmd = [
+        magick_cmd,
+        Utils::PathHelper.quote_path(input_file),
+        '-filter', filter,
+        '-resize', "#{percent}%",
+        Utils::PathHelper.quote_path(output_file)
+      ].join(' ')
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: ImageMagick command: #{cmd}")
+      end
+
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "ImageMagick scaling failed: #{stderr}"
+      end
+
+      Utils::FileHelper.validate_exists!(output_file)
+      size = Utils::FileHelper.format_size(File.size(output_file))
+      Utils::OutputFormatter.success("Scale complete (#{size})\n")
     end
 
     # Apply unsharp mask using ImageMagick
