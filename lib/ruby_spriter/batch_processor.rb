@@ -152,16 +152,18 @@ module RubySpriter
     end
 
     def process_with_gimp(input_file, video_result)
-      # Get GIMP path from dependency checker
+      # Get GIMP path and version from dependency checker
       checker = DependencyChecker.new(verbose: false)
       results = checker.check_all
       gimp_path = checker.gimp_path
+      gimp_version = checker.gimp_version
 
       unless gimp_path
         raise DependencyError, "GIMP not found but required for processing"
       end
 
-      gimp_processor = GimpProcessor.new(gimp_path, options)
+      gimp_options = options.merge(gimp_version: gimp_version)
+      gimp_processor = GimpProcessor.new(gimp_path, gimp_options)
       output_file = gimp_processor.process(input_file)
 
       # Clean up intermediate file if different

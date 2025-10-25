@@ -210,7 +210,7 @@ module RubySpriter
         options[:remove_bg] = true
       end
 
-      opts.on("-t", "--threshold VALUE", Float, "Feather radius (default: 0.0 = no feathering)") do |t|
+      opts.on("-t", "--threshold VALUE", Float, "Background color tolerance % (default: 15.0, range: 0-100)") do |t|
         options[:bg_threshold] = t
       end
 

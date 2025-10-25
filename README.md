@@ -1,4 +1,4 @@
-# Ruby Spriter v0.6.7
+# Ruby Spriter v0.6.7.1
 
 [![Ruby](https://img.shields.io/badge/Ruby-2.7+-red.svg)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -68,6 +68,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 | **FFprobe** | Latest | Video analysis (included with FFmpeg) |
 | **ImageMagick** | 7.x+ | Metadata and sharpening |
 | **GIMP** | 3.x (or 2.10) | Scaling and background removal |
+| **Xvfb** | Latest (Linux only) | Virtual display for headless GIMP |
 
 ### Ruby Version
 - Ruby 2.7.0 or higher
@@ -90,6 +91,7 @@ Ruby Spriter requires these external tools for video and image processing:
 | **FFmpeg** | Video frame extraction | Any recent version |
 | **ImageMagick** | Image manipulation & metadata | 7.x or 6.9+ |
 | **GIMP** | Advanced image processing | 3.x (or 2.10) |
+| **Xvfb** | Virtual display (Linux only) | Any recent version |
 
 #### Installing Prerequisites
 
@@ -158,8 +160,18 @@ brew install ffmpeg imagemagick gimp
 sudo apt update && sudo apt install ruby-full -y
 
 # Install Ruby Spriter dependencies
-sudo apt install ffmpeg imagemagick gimp -y
+sudo apt install ffmpeg imagemagick -y
+
+# Install GIMP 3.x via Flatpak (recommended)
+sudo apt install flatpak -y
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.gimp.GIMP -y
+
+# Install Xvfb for headless GIMP operation
+sudo apt install xvfb -y
 ```
+
+**Note for Linux Users**: GIMP 3.x requires a display connection. Ruby Spriter automatically uses Xvfb (X Virtual Framebuffer) with Flatpak socket isolation to provide a completely headless virtual display. No GIMP GUI windows will appear on your screen - perfect for both desktop use (no distractions) and server environments (CI/CD, Docker, SSH sessions).
 
 **Linux (Fedora/RHEL)**
 
@@ -168,7 +180,15 @@ sudo apt install ffmpeg imagemagick gimp -y
 sudo dnf install ruby -y
 
 # Install Ruby Spriter dependencies
-sudo dnf install ffmpeg imagemagick gimp -y
+sudo dnf install ffmpeg imagemagick -y
+
+# Install GIMP 3.x via Flatpak (recommended)
+sudo dnf install flatpak -y
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.gimp.GIMP -y
+
+# Install Xvfb for headless GIMP operation
+sudo dnf install xorg-x11-server-Xvfb -y
 ```
 
 ---
@@ -684,6 +704,34 @@ ruby_spriter --video input.mp4 --scale 50 --sharpen --debug
 # - ImageMagick commands
 # - Processing timestamps
 ```
+
+### Headless Linux Operation (v0.6.7.1+)
+
+Ruby Spriter provides completely headless GIMP operation on Linux via Xvfb and Flatpak socket isolation:
+
+```bash
+# No GIMP GUI appears during processing
+ruby_spriter --image sprite.png --remove-bg --scale 50
+
+# Perfect for server environments
+ruby_spriter --batch --dir "sprites/" --remove-bg --max-compress
+```
+
+**How it Works:**
+- Automatically detects GIMP 3.x Flatpak installation
+- Uses Xvfb (X Virtual Framebuffer) to provide virtual display
+- Flatpak socket isolation (`--nosocket=x11 --nosocket=wayland`) prevents GUI from appearing
+- No configuration required - works automatically
+
+**Use Cases:**
+- **Desktop**: No GUI distractions during batch processing
+- **Server**: Headless automation on Ubuntu Server, CI/CD pipelines
+- **Docker**: Run in containers without display server
+- **SSH**: Process sprites remotely without X forwarding
+
+**Requirements:**
+- GIMP 3.x via Flatpak (`flatpak install flathub org.gimp.GIMP`)
+- Xvfb (`sudo apt install xvfb` on Ubuntu/Debian)
 
 ---
 

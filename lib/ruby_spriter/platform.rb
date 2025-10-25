@@ -29,10 +29,13 @@ module RubySpriter
         '/usr/bin/gimp',
         '/usr/local/bin/gimp',
         '/snap/bin/gimp',
-        '/opt/gimp/bin/gimp'
+        '/opt/gimp/bin/gimp',
+        'flatpak:org.gimp.GIMP'  # Flatpak GIMP
       ].freeze,
       macos: [
         '/Applications/GIMP.app/Contents/MacOS/gimp',
+        '/Applications/GIMP-2.99.app/Contents/MacOS/gimp',  # GIMP 3.x dev
+        '/Applications/GIMP-3.0.app/Contents/MacOS/gimp',   # GIMP 3.x release
         '/Applications/GIMP-2.10.app/Contents/MacOS/gimp'
       ].freeze
     }.freeze
@@ -76,6 +79,58 @@ module RubySpriter
       # Get ImageMagick identify command name
       def imagemagick_identify_cmd
         windows? ? 'magick identify' : 'identify'
+      end
+
+      # Detect GIMP version from version string output
+      # @param version_output [String] Output from gimp --version command
+      # @return [Hash] Version information with :major, :minor, :patch, :full keys, or nil if parse fails
+      def detect_gimp_version(version_output)
+        return nil if version_output.nil? || version_output.empty?
+
+        # Match version pattern: "version X.Y.Z" or "version X.Y"
+        match = version_output.match(/version\s+(\d+)\.(\d+)(?:\.(\d+))?/i)
+        return nil unless match
+
+        {
+          major: match[1].to_i,
+          minor: match[2].to_i,
+          patch: match[3]&.to_i || 0,
+          full: match[1..3].compact.join('.')
+        }
+      end
+
+      # Get GIMP version from executable path
+      # @param gimp_path [String] Path to GIMP executable or flatpak:app.id
+      # @return [Hash] Version information, or nil if detection fails
+      def get_gimp_version(gimp_path)
+        return nil if gimp_path.nil? || gimp_path.empty?
+
+        require 'open3'
+
+        # Handle Flatpak GIMP
+        if gimp_path.start_with?('flatpak:')
+          flatpak_app = gimp_path.sub('flatpak:', '')
+          stdout, stderr, status = Open3.capture3("flatpak run #{flatpak_app} --version")
+          return nil unless status.success?
+          return detect_gimp_version(stdout + stderr)
+        end
+
+        return nil unless File.exist?(gimp_path)
+
+        stdout, stderr, status = Open3.capture3("#{quote_path_simple(gimp_path)} --version")
+        return nil unless status.success?
+
+        detect_gimp_version(stdout + stderr)
+      rescue StandardError
+        nil
+      end
+
+      private
+
+      # Simple path quoting helper for Platform module
+      def quote_path_simple(path)
+        return path unless path.include?(' ')
+        windows? ? "\"#{path}\"" : "'#{path}'"
       end
     end
   end

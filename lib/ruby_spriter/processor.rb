@@ -25,6 +25,7 @@ module RubySpriter
     def initialize(options = {})
       @options = default_options.merge(options)
       @gimp_path = nil
+      @gimp_version = nil
       validate_numeric_options!
       validate_split_option!
       validate_extract_option!
@@ -340,7 +341,10 @@ module RubySpriter
         raise DependencyError, "Missing required dependencies: #{missing.join(', ')}"
       end
 
-      @gimp_path = checker.gimp_path if results[:gimp][:available]
+      if results[:gimp][:available]
+        @gimp_path = checker.gimp_path
+        @gimp_version = checker.gimp_version
+      end
 
       if options[:debug]
         checker.print_report
@@ -703,7 +707,8 @@ module RubySpriter
     end
 
     def process_with_gimp(input_file)
-      gimp_processor = GimpProcessor.new(@gimp_path, options)
+      gimp_options = options.merge(gimp_version: @gimp_version)
+      gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
       gimp_processor.process(input_file)
     end
 

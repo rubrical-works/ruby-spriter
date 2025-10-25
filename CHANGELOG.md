@@ -12,6 +12,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.7.1] - 2025-10-24
+
+### 🐧 Linux Support Enhancement Release
+
+#### Added
+- **Linux GIMP 3.x Support**: Full support for GIMP 3.x on Linux via Flatpak
+  - Automatic detection of Flatpak GIMP installation (`flatpak:org.gimp.GIMP`)
+  - Automatic Xvfb integration for completely headless GIMP operation
+  - Virtual display provided by Xvfb eliminates display connection requirement
+  - Flatpak socket isolation (`--nosocket=x11 --nosocket=wayland`) prevents GUI from appearing
+  - Python-fu batch mode works correctly with `python-fu-eval` interpreter
+  - Background removal, scaling, and all GIMP features fully functional
+  - Perfect for desktop use (no GUI distraction) and server environments (CI/CD, Docker, SSH)
+- **GIMP Version Detection**: Detect and report GIMP version (2.x or 3.x)
+  - `Platform.detect_gimp_version(version_output)` - Parse version from `--version` output
+  - `Platform.get_gimp_version(gimp_path)` - Get version from executable or Flatpak
+  - Works with both regular executables and Flatpak installations
+- **Xvfb Dependency Checking**: Added Xvfb to dependency checker (Linux only)
+  - Marked as required on Linux, optional on Windows/macOS
+  - Provides clear installation instructions if missing
+  - Validates availability before GIMP operations
+- **DependencyChecker Version Tracking**: Store and report detected GIMP version
+- **Xvfb Integration**: Transparent Xvfb usage when GIMP Flatpak detected
+  - Command format: `xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland org.gimp.GIMP --no-splash --quit --batch-interpreter=python-fu-eval`
+  - No user configuration required - works automatically
+  - Completely headless - no GUI windows appear on screen
+
+#### Changed
+- **Platform Detection**: Enhanced to detect Flatpak GIMP alongside traditional installations
+- **GimpProcessor**: Updated to support both GIMP 2.x and 3.x APIs (version-aware)
+- **Unix GIMP Execution**: Automatically uses Xvfb with socket isolation for Flatpak installations
+- **Alternative GIMP Paths**: Added `flatpak:org.gimp.GIMP` to Linux search paths
+- **Warning Filters**: Enhanced to filter Xvfb, Wayland, and Flatpak cosmetic warnings
+- **DependencyChecker**: Now supports platform-specific optional dependencies
+
+#### Technical Details
+- **GIMP Flatpak Detection**: Uses `flatpak list --app | grep` to verify installation
+- **Version Parsing**: Regex-based parsing of `GIMP version X.Y.Z` output
+- **Python Interpreter**: Correct name is `python-fu-eval` (not `python-eval`)
+- **Xvfb Flags**:
+  - `--auto-servernum` - Automatically finds free display number
+  - `--server-args='-screen 0 1024x768x24'` - Configures virtual display
+- **Flatpak Socket Isolation**:
+  - `--nosocket=x11` - Prevents access to host X11 display socket
+  - `--nosocket=wayland` - Prevents access to host Wayland display socket
+  - Ensures GIMP runs only in Xvfb virtual display
+- **Platform Module**: New methods for version detection and Flatpak handling
+- **Warning Filtering**: Filters Gdk-WARNING, LibGimp-WARNING, Gimp-Core-WARNING, X11 socket messages
+
+#### Installation Requirements (Linux)
+```bash
+# Ubuntu/Debian
+sudo apt install flatpak xvfb -y
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.gimp.GIMP -y
+
+# Fedora/RHEL
+sudo dnf install flatpak xorg-x11-server-Xvfb -y
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.gimp.GIMP -y
+```
+
+#### Example Output
+```bash
+$ ruby_spriter --check-dependencies
+============================================================
+Dependency Check
+============================================================
+
+✅ FFMPEG
+   Found: 6.1.1
+
+✅ FFPROBE
+   Found: 6.1.1
+
+✅ IMAGEMAGICK
+   Found: Version: ImageMagick 6.9.12-98 Q16 x86_64
+
+✅ XVFB
+   Found: Usage: xvfb-run [OPTION ...] COMMAND
+
+✅ GIMP
+   Found: flatpak:org.gimp.GIMP
+   Version: GIMP 3.0.6
+
+============================================================
+
+$ ruby_spriter --image sprite.png --remove-bg
+============================================================
+GIMP Processing
+============================================================
+📝 Using GIMP via Xvfb (virtual display)
+      Removing background (fuzzy select)...
+      === GIMP Messages ===
+      Loading image...
+      Image size: 1280x748
+      Added alpha channel
+      Sampling 4 corners...
+      Using FUZZY SELECT (contiguous regions only)
+        Corner 1 at (0, 0)
+        Corner 2 at (1279, 0)
+        Corner 3 at (0, 747)
+        Corner 4 at (1279, 747)
+      Selection complete
+      Growing selection by 1 pixels...
+      Selection grown
+      Removing background...
+      Background removed
+      Deselecting...
+      Exporting...
+      SUCCESS - Background removed!
+      ====================
+✅ Background Removal complete (142.15 KB)
+```
+
+**Note**: No GIMP GUI window appears on screen - completely headless operation!
+
+---
+
 ## [0.6.7] - 2025-10-24
 
 ### 🚀 Batch Processing, Compression, Directory Consolidation & Frame Extraction Release

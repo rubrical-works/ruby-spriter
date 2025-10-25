@@ -71,12 +71,22 @@ RSpec.describe RubySpriter::Platform do
   describe '.imagemagick_identify_cmd' do
     it 'returns appropriate command for platform' do
       cmd = described_class.imagemagick_identify_cmd
-      
+
       if described_class.windows?
         expect(cmd).to eq('magick identify')
       else
         expect(cmd).to eq('identify')
       end
+    end
+  end
+
+  describe '.detect_gimp_version' do
+    it 'detects GIMP 3.x version from command output' do
+      gimp3_output = "GNU Image Manipulation Program version 3.0.0"
+      version = described_class.detect_gimp_version(gimp3_output)
+      expect(version[:major]).to eq(3)
+      expect(version[:minor]).to eq(0)
+      expect(version[:full]).to eq('3.0.0')
     end
   end
 end

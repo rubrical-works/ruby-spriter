@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.8
+**Current Version**: 0.6.7.1
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -15,6 +15,7 @@ The tool orchestrates several external command-line tools:
 - **FFmpeg/FFprobe**: Video frame extraction and analysis
 - **ImageMagick**: Metadata management, consolidation, and sharpening
 - **GIMP 3.x (or 2.10)**: Image processing (scaling with interpolation, background removal)
+- **Xvfb** (Linux only): Virtual display for headless GIMP operation
 
 All external dependencies are checked at runtime via `DependencyChecker` (lib/ruby_spriter/dependency_checker.rb).
 
@@ -114,11 +115,15 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 
 **GimpProcessor** (lib/ruby_spriter/gimp_processor.rb)
 - Generates Python-fu scripts for GIMP 3.x batch processing
+- Supports both GIMP 2.x and 3.x APIs (version-aware)
 - Supports 5 interpolation methods: none, linear, cubic, nohalo (default), lohalo
 - Automatically optimizes operation order (remove background before scale) when both operations requested
 - Applies sharpening via ImageMagick after GIMP operations (not GIMP GEGL due to batch mode limitations)
 - Preserves alpha channels and metadata through processing pipeline
-- Handles platform-specific GIMP execution (Windows uses batch files, Unix uses shell commands)
+- Handles platform-specific GIMP execution:
+  - Windows: Uses batch files
+  - Unix: Shell commands with redirection
+  - Linux Flatpak: Automatic Xvfb integration for headless operation
 - Filters out cosmetic GEGL warnings from GIMP 3.x
 
 **Consolidator** (lib/ruby_spriter/consolidator.rb)
@@ -183,6 +188,8 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 **Platform** (lib/ruby_spriter/platform.rb)
 - Detects OS (Windows, Linux, macOS)
 - Provides platform-specific paths (GIMP executable, ImageMagick commands)
+- Detects GIMP version (2.x or 3.x) from executable or Flatpak
+- Supports Flatpak GIMP installation (`flatpak:org.gimp.GIMP`)
 - Abstracts platform differences
 
 ### Utilities
@@ -260,6 +267,12 @@ Both methods sample all four corners of the image and combine selections.
 
 **Unix**: Calls GIMP directly with shell redirection
 
+**Linux (Flatpak GIMP)**: Automatically uses Xvfb for headless operation
+- Detection: GIMP path starts with `flatpak:`
+- Command format: `xvfb-run -a flatpak run org.gimp.GIMP --quit --batch-interpreter=python-fu-eval`
+- Virtual display eliminates display connection requirement
+- Enables batch processing on headless servers
+
 ### Metadata Preservation
 
 GIMP strips PNG metadata during export, so `GimpProcessor#preserve_metadata` explicitly:
@@ -282,6 +295,8 @@ Tests use RSpec and follow the pattern:
 - **Path Handling**: All paths are quoted appropriately for shell commands via `PathHelper.quote_path`
 - **Error Handling**: Custom exceptions (DependencyError, ProcessingError, ValidationError) for clear error messages
 - **GIMP 3.x Batch Mode**: GEGL buffer leak warnings are cosmetic and filtered from output
+- **Linux Headless Operation**: Xvfb automatically used for Flatpak GIMP to enable headless batch processing
+- **GIMP Version Detection**: Automatically detects and adapts to GIMP 2.x or 3.x APIs
 
 ## Common Workflows
 

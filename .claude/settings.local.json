@@ -11,7 +11,12 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(ruby -e:*)",
-      "Bash(ruby bin/ruby_spriter:*)"
+      "Bash(ruby bin/ruby_spriter:*)",
+      "Read(//tmp/**)",
+      "Bash(timeout 10 gimp-console:*)",
+      "Bash(timeout 5 gimp:*)",
+      "Bash(timeout 10 gimp:*)",
+      "Bash(gimp-console:*)"
     ],
     "deny": [],
     "ask": []
