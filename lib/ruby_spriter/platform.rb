@@ -34,6 +34,8 @@ module RubySpriter
       ].freeze,
       macos: [
         '/Applications/GIMP.app/Contents/MacOS/gimp',
+        '/Applications/GIMP-2.99.app/Contents/MacOS/gimp',  # GIMP 3.x dev
+        '/Applications/GIMP-3.0.app/Contents/MacOS/gimp',   # GIMP 3.x release
         '/Applications/GIMP-2.10.app/Contents/MacOS/gimp'
       ].freeze
     }.freeze
