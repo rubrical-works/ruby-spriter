@@ -45,6 +45,13 @@ module RubySpriter
         raise ValidationError, "--add-meta cannot be combined with processing options (--scale, --remove-bg, --sharpen)"
       end
 
+      # Validate --aggressive requires --remove-bg
+      if options[:aggressive] && !options[:remove_bg]
+        puts "Error: --aggressive requires --remove-bg flag"
+        puts "Usage: ruby_spriter --video INPUT --remove-bg --aggressive"
+        exit 1
+      end
+
       # Run processor
       processor = Processor.new(options)
       processor.run
@@ -210,6 +217,10 @@ module RubySpriter
         options[:remove_bg] = true
       end
 
+      opts.on("--aggressive", "Use rembg for AI-powered background removal (requires --remove-bg and Python with rembg installed)") do
+        options[:aggressive] = true
+      end
+
       opts.on("-t", "--threshold VALUE", Float, "Background color tolerance % (default: 15.0, range: 0-100)") do |t|
         options[:bg_threshold] = t
       end
@@ -314,6 +325,7 @@ module RubySpriter
       opts.separator "  ruby_spriter --check-dependencies"
       opts.separator "  ruby_spriter --video input.mp4"
       opts.separator "  ruby_spriter --video input.mp4 --remove-bg --scale 50"
+      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --aggressive"
       opts.separator "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo --sharpen"
       opts.separator "  ruby_spriter --video input.mp4 --max-compress"
       opts.separator "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
@@ -376,6 +388,7 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
+      puts "    --aggressive                   └─ Use rembg for AI-powered removal (requires Python + rembg)"
       puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
       puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
@@ -394,6 +407,7 @@ module RubySpriter
       puts "  ruby_spriter --video input.mp4"
       puts "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo"
       puts "  ruby_spriter --video input.mp4 --remove-bg --fuzzy --threshold 0.5"
+      puts "  ruby_spriter --video input.mp4 --remove-bg --aggressive"
       puts "  ruby_spriter --video input.mp4 --scale 50 --sharpen --max-compress"
       puts ""
       exit
@@ -422,6 +436,7 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
+      puts "    --aggressive                   └─ Use rembg for AI-powered removal (requires Python + rembg)"
       puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
       puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
@@ -453,6 +468,7 @@ module RubySpriter
       puts "Examples:"
       puts "  ruby_spriter --image sprite.png --scale 50 --interpolation nohalo"
       puts "  ruby_spriter --image sprite.png --remove-bg --fuzzy --threshold 1.0"
+      puts "  ruby_spriter --image sprite.png --remove-bg --aggressive"
       puts "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
       puts "  ruby_spriter --image sprite.png --split 4:4 --override-md"
       puts "  ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3"
@@ -536,6 +552,7 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
+      puts "    --aggressive                   └─ Use rembg for AI-powered removal (requires Python + rembg)"
       puts "    --fuzzy                        └─ Use fuzzy select (DEFAULT)"
       puts "    --no-fuzzy                     └─ Use global color select"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
@@ -560,6 +577,7 @@ module RubySpriter
       puts "  ruby_spriter --batch --dir videos/"
       puts "  ruby_spriter --batch --dir videos/ --outputdir output/"
       puts "  ruby_spriter --batch --dir videos/ --scale 50 --sharpen"
+      puts "  ruby_spriter --batch --dir videos/ --remove-bg --aggressive"
       puts "  ruby_spriter --batch --dir videos/ --batch-consolidate --max-compress"
       puts ""
       exit

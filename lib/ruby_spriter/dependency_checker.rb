@@ -55,12 +55,13 @@ module RubySpriter
     # @return [Hash] Results of dependency checks
     def check_all
       results = {}
-      
+
       REQUIRED_TOOLS.each do |tool, config|
         results[tool] = check_tool(tool, config)
       end
 
       results[:gimp] = check_gimp
+      results[:rembg] = check_rembg_with_optional_status
 
       results
     end
@@ -81,11 +82,22 @@ module RubySpriter
       puts "=" * 60
       
       results.each do |tool, status|
+        # Determine icon based on availability and optional status
         if status[:optional] && !status[:available]
           icon = "⚪"
-          optional_text = " (Optional for #{Platform.current})"
         else
           icon = status[:available] ? "✅" : "❌"
+        end
+
+        # Determine optional text
+        if status[:optional]
+          # Rembg is optional for all platforms, others may be platform-specific
+          if tool == :rembg
+            optional_text = " (Optional - required for --aggressive mode)"
+          else
+            optional_text = " (Optional for #{Platform.current})"
+          end
+        else
           optional_text = ""
         end
 
@@ -96,12 +108,20 @@ module RubySpriter
             version_str = "GIMP #{status[:version][:full]}"
             puts "   Found: #{status[:path]}"
             puts "   Version: #{version_str}"
+          elsif tool == :rembg
+            puts "   Found: #{status[:path]}"
+            puts "   Version: #{status[:version]}"
           else
             puts "   Found: #{status[:path] || status[:version]}"
           end
         else
           if status[:optional]
-            puts "   Status: NOT FOUND (not required for this platform)"
+            if tool == :rembg
+              puts "   Status: NOT FOUND (optional)"
+              puts "   Install: #{status[:install_cmd]}"
+            else
+              puts "   Status: NOT FOUND (not required for this platform)"
+            end
           else
             puts "   Status: NOT FOUND"
             puts "   Install: #{status[:install_cmd]}"
@@ -117,6 +137,37 @@ module RubySpriter
 
     # Get the detected GIMP version info
     attr_reader :gimp_version
+
+    # Check for rembg availability
+    # @return [Hash] Status hash with :available, :version, and :path keys
+    def self.check_rembg
+      begin
+        # Try both "rembg" and "python -m rembg"
+        stdout, stderr, status = Open3.capture3('rembg --version 2>&1')
+        version_output = (stdout + stderr).strip
+
+        if version_output.empty? || !status.success?
+          stdout, stderr, status = Open3.capture3('python -m rembg --version 2>&1')
+          version_output = (stdout + stderr).strip
+        end
+
+        if status.success? && !version_output.empty?
+          # Parse version from output
+          version = version_output.match(/\d+\.\d+\.\d+/)&.to_s || 'unknown'
+
+          # Find path to rembg
+          path_cmd = Platform.windows? ? 'where rembg 2>nul' : 'which rembg 2>/dev/null'
+          path_stdout, _stderr, _status = Open3.capture3(path_cmd)
+          path = path_stdout.strip
+
+          { available: true, version: version, path: path }
+        else
+          { available: false, version: nil, path: nil }
+        end
+      rescue => e
+        { available: false, version: nil, path: nil }
+      end
+    end
 
     private
 
@@ -219,6 +270,18 @@ module RubySpriter
       else
         output.lines.first&.strip || 'Unknown'
       end
+    end
+
+    def check_rembg_with_optional_status
+      result = self.class.check_rembg
+      # Mark rembg as optional (only needed for --aggressive mode)
+      result[:optional] = true
+      result[:install_cmd] = rembg_install_command unless result[:available]
+      result
+    end
+
+    def rembg_install_command
+      'pip install "rembg[cli]" (or python -m pip install "rembg[cli]" on Windows)'
     end
   end
 end

@@ -169,6 +169,60 @@ RSpec.describe RubySpriter::CLI do
           described_class.start(['--check-dependencies'])
         end.to raise_error(SystemExit)
       end
+
+      describe 'rembg in dependency output' do
+        it 'includes rembg in dependency check output when available' do
+          allow(RubySpriter::DependencyChecker).to receive(:check_rembg)
+            .and_return({ available: true, version: '2.0.0', path: '/usr/bin/rembg' })
+
+          output = StringIO.new
+          $stdout = output
+
+          begin
+            described_class.start(['--check-dependencies'])
+          rescue SystemExit
+            # Expected
+          ensure
+            $stdout = STDOUT
+          end
+
+          expect(output.string).to match(/REMBG/)
+          expect(output.string).to match(/2\.0\.0/)
+        end
+
+        it 'shows optional status for rembg' do
+          output = StringIO.new
+          $stdout = output
+
+          begin
+            described_class.start(['--check-dependencies'])
+          rescue SystemExit
+            # Expected
+          ensure
+            $stdout = STDOUT
+          end
+
+          expect(output.string).to match(/REMBG.*\(Optional/i)
+        end
+
+        it 'shows installation instructions when rembg is missing' do
+          allow(RubySpriter::DependencyChecker).to receive(:check_rembg)
+            .and_return({ available: false, version: nil, path: nil })
+
+          output = StringIO.new
+          $stdout = output
+
+          begin
+            described_class.start(['--check-dependencies'])
+          rescue SystemExit
+            # Expected
+          ensure
+            $stdout = STDOUT
+          end
+
+          expect(output.string).to match(/pip install.*rembg/i)
+        end
+      end
     end
 
     describe '--overwrite flag' do
@@ -400,6 +454,40 @@ RSpec.describe RubySpriter::CLI do
         allow(RubySpriter::Processor).to receive(:new) do |options|
           expect(options[:image]).to eq(fixture_with_meta)
           expect(options[:remove_bg]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', fixture_with_meta, '--remove-bg'])
+      end
+
+      it 'works with --aggressive flag when used with --remove-bg' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:image]).to eq(fixture_with_meta)
+          expect(options[:remove_bg]).to eq(true)
+          expect(options[:aggressive]).to eq(true)
+          processor_double
+        end
+
+        described_class.start(['--image', fixture_with_meta, '--remove-bg', '--aggressive'])
+      end
+
+      it 'raises error when --aggressive is used without --remove-bg' do
+        expect do
+          described_class.start(['--image', fixture_with_meta, '--aggressive'])
+        end.to raise_error(SystemExit)
+      end
+
+      it 'allows --remove-bg without --aggressive (GIMP mode)' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:image]).to eq(fixture_with_meta)
+          expect(options[:remove_bg]).to eq(true)
+          expect(options[:aggressive]).to be_nil
           processor_double
         end
 

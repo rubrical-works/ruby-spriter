@@ -732,4 +732,106 @@ RSpec.describe RubySpriter::Processor do
       processor.run
     end
   end
+
+  describe 'background removal method selection' do
+    let(:temp_dir) { @test_dir }
+    let(:video_file) { File.join(temp_dir, 'test.mp4') }
+
+    before do
+      FileUtils.touch(video_file)
+      allow_any_instance_of(described_class).to receive(:check_dependencies!)
+      allow_any_instance_of(described_class).to receive(:setup_temp_directory)
+      allow_any_instance_of(described_class).to receive(:cleanup_temp_directory)
+      allow(FileUtils).to receive(:cp)
+      allow(File).to receive(:exist?).and_call_original
+      allow(File).to receive(:exist?).with(/output_gimp\.png|output_rembg\.png|spritesheet_rembg\.png/).and_return(true)
+      allow(File).to receive(:delete)
+    end
+
+    it 'uses GIMP when remove_bg is true but aggressive is false' do
+      options = {
+        video: video_file,
+        output: 'output.png',
+        remove_bg: true,
+        aggressive: false
+      }
+
+      processor = described_class.new(options)
+
+      # Mock VideoProcessor
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+      allow(video_processor).to receive(:create_spritesheet).and_return({
+        output_file: 'spritesheet.png',
+        columns: 4,
+        rows: 4,
+        frames: 16
+      })
+
+      # Expect GimpProcessor to be used, not RembgProcessor
+      gimp_processor = instance_double(RubySpriter::GimpProcessor)
+      expect(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_processor)
+      expect(gimp_processor).to receive(:process).and_return('output_gimp.png')
+      expect(RubySpriter::RembgProcessor).not_to receive(:new)
+
+      processor.run
+    end
+
+    it 'uses rembg when both remove_bg and aggressive are true' do
+      options = {
+        video: video_file,
+        output: 'output.png',
+        remove_bg: true,
+        aggressive: true
+      }
+
+      processor = described_class.new(options)
+
+      # Mock VideoProcessor
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+      allow(video_processor).to receive(:create_spritesheet).and_return({
+        output_file: 'spritesheet.png',
+        columns: 4,
+        rows: 4,
+        frames: 16
+      })
+
+      # Expect RembgProcessor to be used, not GimpProcessor
+      rembg_processor = instance_double(RubySpriter::RembgProcessor)
+      expect(RubySpriter::RembgProcessor).to receive(:new).and_return(rembg_processor)
+      expect(rembg_processor).to receive(:remove_background).and_return('output_rembg.png')
+      expect(RubySpriter::GimpProcessor).not_to receive(:new)
+
+      processor.run
+    end
+
+    it 'shows helpful error when aggressive is true but rembg is not installed' do
+      allow(RubySpriter::DependencyChecker).to receive(:check_rembg)
+        .and_return({ available: false, version: nil, path: nil })
+
+      options = {
+        video: video_file,
+        output: 'output.png',
+        remove_bg: true,
+        aggressive: true
+      }
+
+      # Mock VideoProcessor
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+      allow(video_processor).to receive(:create_spritesheet).and_return({
+        output_file: 'spritesheet.png',
+        columns: 4,
+        rows: 4,
+        frames: 16
+      })
+
+      processor = described_class.new(options)
+
+      expect {
+        processor.run
+      }.to raise_error(RubySpriter::ProcessingError, /rembg is not installed.*pip install/)
+    end
+  end
 end

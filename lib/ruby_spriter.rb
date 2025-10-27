@@ -25,6 +25,7 @@ require_relative 'ruby_spriter/metadata_manager'
 # Load processors
 require_relative 'ruby_spriter/video_processor'
 require_relative 'ruby_spriter/gimp_processor'
+require_relative 'ruby_spriter/rembg_processor'
 require_relative 'ruby_spriter/consolidator'
 require_relative 'ruby_spriter/compression_manager'
 require_relative 'ruby_spriter/batch_processor'

@@ -66,6 +66,7 @@ module RubySpriter
         sharpen_gain: 0.5,
         sharpen_threshold: 0.03,
         remove_bg: false,
+        aggressive: false,
         bg_threshold: 0.0,
         grow_selection: 1,
         fuzzy_select: true,
@@ -356,6 +357,9 @@ module RubySpriter
     end
 
     def needs_gimp_specifically?
+      # GIMP not needed if using aggressive mode (rembg handles background removal)
+      return false if options[:aggressive]
+
       options[:scale_percent] || options[:remove_bg]
     end
 
@@ -707,9 +711,41 @@ module RubySpriter
     end
 
     def process_with_gimp(input_file)
-      gimp_options = options.merge(gimp_version: @gimp_version)
-      gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
-      gimp_processor.process(input_file)
+      working_file = input_file
+
+      # Step 1: Background removal with rembg if aggressive mode
+      if options[:remove_bg] && options[:aggressive]
+        working_file = remove_background_with_rembg(working_file)
+      end
+
+      # Step 2: GIMP processing for other operations (or non-aggressive BG removal)
+      if needs_gimp_for_operations?
+        gimp_options = options.merge(gimp_version: @gimp_version)
+
+        # If aggressive, disable BG removal in GIMP (already done by rembg)
+        if options[:aggressive]
+          gimp_options = gimp_options.merge(remove_bg: false)
+        end
+
+        gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
+        working_file = gimp_processor.process(working_file)
+      end
+
+      working_file
+    end
+
+    def needs_gimp_for_operations?
+      # Need GIMP if we have scaling, sharpening, OR non-aggressive background removal
+      options[:scale_percent] ||
+        options[:sharpen] ||
+        (options[:remove_bg] && !options[:aggressive])
+    end
+
+    def remove_background_with_rembg(input_file)
+      rembg_processor = RembgProcessor.new(options)
+      output_file = input_file.sub('.png', '_rembg.png')
+      rembg_processor.remove_background(input_file, output_file)
+      output_file
     end
 
     def generate_consolidated_filename

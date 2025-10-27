@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.7.1
+**Current Version**: 0.7.0
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -15,6 +15,7 @@ The tool orchestrates several external command-line tools:
 - **FFmpeg/FFprobe**: Video frame extraction and analysis
 - **ImageMagick**: Metadata management, consolidation, and sharpening
 - **GIMP 3.x (or 2.10)**: Image processing (scaling with interpolation, background removal)
+- **rembg** (Optional): AI-powered background removal (Python CLI tool, required for `--aggressive` mode)
 - **Xvfb** (Linux only): Virtual display for headless GIMP operation
 
 All external dependencies are checked at runtime via `DependencyChecker` (lib/ruby_spriter/dependency_checker.rb).
@@ -125,6 +126,16 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
   - Unix: Shell commands with redirection
   - Linux Flatpak: Automatic Xvfb integration for headless operation
 - Filters out cosmetic GEGL warnings from GIMP 3.x
+
+**RembgProcessor** (lib/ruby_spriter/rembg_processor.rb) - *v0.7.0+*
+- AI-powered background removal using rembg Python tool
+- Activated with `--aggressive` flag (requires `--remove-bg`)
+- Uses machine learning models for superior edge detection
+- Mutually exclusive with GIMP background removal
+- Supports combined workflows: rembg for BG removal + GIMP for scaling/sharpening
+- Cross-platform path handling via `Utils::PathHelper`
+- Validates rembg availability at runtime via `DependencyChecker`
+- Install: `pip install "rembg[cli]"`
 
 **Consolidator** (lib/ruby_spriter/consolidator.rb)
 - Validates column compatibility between spritesheets
