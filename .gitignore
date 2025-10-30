@@ -56,3 +56,8 @@ Thumbs.db
 *-scaled-*.png
 *-nobg-*.png
 consolidated_*.png
+
+# v0.7.0 additions
+spec/tmp/
+ai-conversation-exports/
+*_threshold_stepped.png
