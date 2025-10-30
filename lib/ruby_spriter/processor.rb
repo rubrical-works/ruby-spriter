@@ -455,7 +455,12 @@ module RubySpriter
         return execute_extract_workflow
       end
 
-      # Apply GIMP processing if requested (GimpProcessor handles uniqueness)
+      # STEP 1: Threshold stepping (if enabled) - applied before GIMP
+      if options[:threshold_stepping] && options[:remove_bg]
+        working_file = process_threshold_stepping(working_file, intermediate_files)
+      end
+
+      # STEP 2: Apply GIMP processing if requested (edge-based background removal)
       if needs_gimp?
         initial_file = working_file
         working_file = process_with_gimp(working_file)
@@ -466,9 +471,19 @@ module RubySpriter
         end
       end
 
-      # Apply inner background removal if requested (after GIMP, before final output)
+      # STEP 3: Apply inner background removal if requested (after GIMP)
       if options[:try_inner] && options[:remove_bg]
         working_file = process_inner_background_removal(working_file, intermediate_files)
+      end
+
+      # STEP 4: Ghost edge cleaning (if multi-pass enabled)
+      if options[:multi_pass] && options[:remove_bg]
+        working_file = process_ghost_edge_cleaning(working_file, intermediate_files)
+      end
+
+      # STEP 5: Smoke detection and removal (detection always active when removing bg)
+      if options[:remove_bg]
+        working_file = process_smoke_detection(working_file, intermediate_files)
       end
 
       # Move to final output location if user specified explicit --output
@@ -764,6 +779,117 @@ module RubySpriter
       end
 
       Utils::OutputFormatter.success("Inner background removal complete")
+      output_file
+    end
+
+    def process_threshold_stepping(input_file, intermediate_files)
+      Utils::OutputFormatter.header("THRESHOLD STEPPING")
+      Utils::OutputFormatter.indent("Processing with multiple fuzzy select thresholds...")
+
+      # Create configuration from options
+      config = InnerBgConfig.new(options)
+
+      # Create output file path
+      dir = File.dirname(input_file)
+      basename = File.basename(input_file, '.*')
+      ext = File.extname(input_file)
+      output_file = File.join(dir, "#{basename}_threshold_stepped#{ext}")
+
+      # Process threshold stepping
+      stepper = ThresholdStepper.new(input_file, output_file, config)
+      stepper.process
+
+      # Display processing report
+      report = stepper.report
+      Utils::OutputFormatter.indent("Thresholds processed: #{report[:thresholds_processed].join(', ')}")
+      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+
+      # Track input file for cleanup if it's an intermediate file
+      if input_file != options[:image]
+        intermediate_files << input_file unless intermediate_files.include?(input_file)
+      end
+
+      Utils::OutputFormatter.success("Threshold stepping complete")
+      output_file
+    end
+
+    def process_ghost_edge_cleaning(input_file, intermediate_files)
+      Utils::OutputFormatter.header("GHOST EDGE CLEANING")
+      Utils::OutputFormatter.indent("Removing semi-transparent ghost pixels...")
+
+      # Create configuration from options
+      config = InnerBgConfig.new(options)
+
+      # Create output file path
+      dir = File.dirname(input_file)
+      basename = File.basename(input_file, '.*')
+      ext = File.extname(input_file)
+      output_file = File.join(dir, "#{basename}_ghost_cleaned#{ext}")
+
+      # Process ghost edge cleaning
+      cleaner = GhostEdgeCleaner.new(input_file, output_file, config)
+      cleaner.process
+
+      # Display processing report
+      report = cleaner.report
+      Utils::OutputFormatter.indent("Ghost pixels detected: #{report[:ghost_pixels_detected]}")
+      Utils::OutputFormatter.indent("Passes performed: #{report[:passes_performed]}")
+      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+
+      # Track input file for cleanup if it's an intermediate file
+      if input_file != options[:image]
+        intermediate_files << input_file unless intermediate_files.include?(input_file)
+      end
+
+      Utils::OutputFormatter.success("Ghost edge cleaning complete")
+      output_file
+    end
+
+    def process_smoke_detection(input_file, intermediate_files)
+      Utils::OutputFormatter.header("SMOKE DETECTION")
+      Utils::OutputFormatter.indent("Detecting transparency gradients (smoke effects)...")
+
+      # Validate input file exists
+      unless File.exist?(input_file)
+        Utils::OutputFormatter.indent("⚠️  Input file not found. Skipping smoke detection.")
+        return input_file
+      end
+
+      # Create configuration from options
+      config = InnerBgConfig.new(options)
+
+      # Create output file path
+      dir = File.dirname(input_file)
+      basename = File.basename(input_file, '.*')
+      ext = File.extname(input_file)
+      output_file = File.join(dir, "#{basename}_smoke_processed#{ext}")
+
+      # Process smoke detection/removal
+      detector = SmokeDetector.new(input_file, output_file, config)
+      result = detector.process
+
+      # If processing failed, return input file unchanged
+      unless result
+        Utils::OutputFormatter.indent("⚠️  Smoke detection failed. Continuing with previous output.")
+        return input_file
+      end
+
+      # Display processing report
+      report = detector.report
+      Utils::OutputFormatter.indent("Smoke regions detected: #{report[:smoke_detected]}")
+      if report[:smoke_removed]
+        Utils::OutputFormatter.indent("Smoke removal: ENABLED")
+      else
+        Utils::OutputFormatter.indent("Smoke removal: disabled (detection only)")
+      end
+      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+
+      # Track input file for cleanup if it's an intermediate file
+      if input_file != options[:image]
+        intermediate_files << input_file unless intermediate_files.include?(input_file)
+      end
+
+      Utils::OutputFormatter.success("Smoke detection complete")
       output_file
     end
 
