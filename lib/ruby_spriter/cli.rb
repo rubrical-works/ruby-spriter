@@ -379,6 +379,14 @@ module RubySpriter
       opts.separator "  ruby_spriter --consolidate --dir spritesheets/ --outputdir output/ --max-compress"
       opts.separator "  ruby_spriter --verify spritesheet.png"
       opts.separator ""
+      opts.separator "v0.7.0 Inner Background Removal Examples:"
+      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --try-inner"
+      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --threshold-stepping --try-inner"
+      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --try-inner --multi-pass"
+      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --threshold-stepping --try-inner --multi-pass --remove-smoke"
+      opts.separator "  ruby_spriter --image sprite.png --remove-bg --try-inner --inner-min-area 200"
+      opts.separator "  ruby_spriter --image sprite.png --remove-bg --try-inner --ghost-threshold 40 --bg-fuzz 15"
+      opts.separator ""
     end
 
     def handle_context_sensitive_help(args)
