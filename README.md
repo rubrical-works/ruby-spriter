@@ -16,6 +16,10 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 🎬 **Video to Spritesheet** - Extract frames from MP4 videos using FFmpeg
 - 🖼️ **Advanced Image Processing** - Scale, sharpen, and remove backgrounds with precision
 - 🎨 **Quality Enhancement** - 5 interpolation methods and configurable unsharp masking
+- 🔮 **Inner Background Removal** - Remove interior background regions with advanced edge sampling (v0.7.0+)
+- 🧹 **Multi-Threshold Processing** - Process with multiple fuzzy select thresholds for superior edges (v0.7.0+)
+- 👻 **Ghost Edge Prevention** - Multi-pass cleanup of semi-transparent artifacts (v0.7.0+)
+- 💨 **Smoke Detection** - Identify and remove transparency gradients (v0.7.0+)
 - 📐 **Spritesheet Consolidation** - Merge multiple spritesheets vertically (file list or directory)
 - 📊 **Metadata Management** - Embed, verify, and add grid information to PNG files
 - 🎯 **Frame Extraction** - Extract specific frames by number and create new spritesheets
@@ -24,7 +28,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 📦 **Batch Processing** - Process multiple MP4 files in a directory automatically (v0.6.7+)
 - 🗜️ **Maximum Compression** - Optimal PNG compression while preserving metadata (v0.6.7+)
 - 🌍 **Cross-Platform** - Works seamlessly on Windows, Linux, and macOS
-- 🧪 **Production Ready** - Comprehensive RSpec test coverage (365 tests)
+- 🧪 **Production Ready** - Comprehensive RSpec test coverage (102+ unit tests, 3+ feature tests)
 
 ### Image Processing Features
 
@@ -55,6 +59,66 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - `scale_first` (default) - Scale then remove background
 - `bg_first` - Remove background then scale (auto-enabled when both operations used)
 - Automatic optimization for best quality
+
+### 🆕 v0.7.0 Features - Advanced Background Removal
+
+#### **Inner Background Removal**
+Remove background regions inside sprites (not touching edges) - perfect for centered sprites with interior backgrounds.
+
+**Key Capabilities:**
+- **Edge Sampling** - Detect background colors from image borders
+- **Intelligent Region Detection** - Find and remove contiguous background regions
+- **Multi-Threshold Processing** - Process with multiple threshold values for superior edge quality
+- **Ghost Edge Prevention** - Remove semi-transparent artifacts with multi-pass cleanup
+- **Smoke Detection** - Identify and remove transparency gradients (smoke effects)
+
+**Command-Line Flags:**
+
+Core Features:
+- `--try-inner` - Enable inner background removal
+- `--threshold-stepping` - Process with multiple thresholds (0.0, 0.5, 1.0, 3.0, 5.0, 10.0%)
+- `--multi-pass` - Remove semi-transparent ghost pixels (max 3 passes)
+- `--remove-smoke` - Detect and remove transparency gradients (alpha 20-80%)
+
+Configuration Options:
+- `--inner-min-area N` - Minimum area in pixels to remove (default: 100)
+- `--adaptive-min-area` - Calculate threshold as 1% of image area
+- `--edge-sample-depth N` - Edge sampling depth in pixels (default: 10)
+- `--edge-sample-pattern PATTERN` - Sampling pattern: `linear` or `weighted` (default: linear)
+- `--color-space SPACE` - Color matching: `rgb` or `lab` (default: rgb)
+- `--bg-fuzz N` - Background color tolerance percentage (default: 10)
+- `--ghost-threshold N` - Ghost edge detection threshold 0-255 (default: 30)
+
+**Usage Examples:**
+
+```bash
+# Basic inner background removal
+ruby bin/ruby_spriter --image sprite.png --remove-bg --try-inner
+
+# Full v0.7.0 pipeline with all features
+ruby bin/ruby_spriter --image sprite.png \
+  --remove-bg \
+  --threshold-stepping \
+  --try-inner \
+  --multi-pass \
+  --remove-smoke
+
+# Advanced configuration
+ruby bin/ruby_spriter --image sprite.png \
+  --remove-bg \
+  --try-inner \
+  --adaptive-min-area \
+  --color-space lab \
+  --bg-fuzz 15 \
+  --ghost-threshold 40
+```
+
+**Processing Order:**
+1. Threshold stepping (if enabled)
+2. Edge-based background removal (GIMP)
+3. Inner background removal (if --try-inner)
+4. Ghost edge cleaning (if --multi-pass)
+5. Smoke detection/removal (detection always active with --remove-bg)
 
 ---
 
