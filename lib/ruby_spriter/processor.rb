@@ -466,6 +466,11 @@ module RubySpriter
         end
       end
 
+      # Apply inner background removal if requested (after GIMP, before final output)
+      if options[:try_inner] && options[:remove_bg]
+        working_file = process_inner_background_removal(working_file, intermediate_files)
+      end
+
       # Move to final output location if user specified explicit --output
       if options[:output]
         final_output = Utils::FileHelper.ensure_unique_output(options[:output], overwrite: options[:overwrite])
@@ -710,6 +715,56 @@ module RubySpriter
       gimp_options = options.merge(gimp_version: @gimp_version)
       gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
       gimp_processor.process(input_file)
+    end
+
+    def process_inner_background_removal(input_file, intermediate_files)
+      Utils::OutputFormatter.header("INNER BACKGROUND REMOVAL")
+      Utils::OutputFormatter.indent("Detecting and removing interior background regions...")
+
+      # Create configuration from options
+      config = InnerBgConfig.new(options)
+
+      # Validate configuration
+      unless config.valid?
+        warn "⚠️  Invalid inner background removal configuration. Skipping."
+        return input_file
+      end
+
+      # Sample edge colors to build background palette
+      Utils::OutputFormatter.indent("Sampling edge colors...")
+      sampler = EdgeSampler.new(input_file, config)
+      background_palette = sampler.sample_edges.then { |samples| sampler.build_color_palette(samples) }
+
+      if background_palette.empty?
+        Utils::OutputFormatter.indent("⚠️  No background colors detected. Skipping inner removal.")
+        return input_file
+      end
+
+      Utils::OutputFormatter.indent("Found #{background_palette.length} background color(s)")
+
+      # Create output file path (unique to avoid conflicts)
+      dir = File.dirname(input_file)
+      basename = File.basename(input_file, '.*')
+      ext = File.extname(input_file)
+      output_file = File.join(dir, "#{basename}_inner_removed#{ext}")
+
+      # Process inner background removal
+      processor = InnerBackgroundProcessor.new(input_file, output_file, config, background_palette)
+      processor.process
+
+      # Display processing report
+      report = processor.report
+      Utils::OutputFormatter.indent("Regions detected: #{report[:regions_detected]}")
+      Utils::OutputFormatter.indent("Regions removed: #{report[:regions_removed]}")
+      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+
+      # Track input file for cleanup if it's an intermediate file
+      if input_file != options[:image]
+        intermediate_files << input_file unless intermediate_files.include?(input_file)
+      end
+
+      Utils::OutputFormatter.success("Inner background removal complete")
+      output_file
     end
 
     def generate_consolidated_filename
