@@ -233,6 +233,59 @@ module RubySpriter
       end
 
       opts.separator ""
+      opts.separator "Inner Background Removal (v0.7.0+):"
+
+      opts.on("--try-inner", "Enable inner background removal for centered sprites") do
+        options[:try_inner] = true
+      end
+
+      opts.on("--inner-min-area N", Integer, "Minimum contiguous area threshold in pixels (default: 100)") do |n|
+        options[:inner_min_area] = n
+      end
+
+      opts.on("--adaptive-min-area", "Calculate area threshold as 1% of image area") do
+        options[:adaptive_min_area] = true
+      end
+
+      opts.on("--multi-pass", "Enable multi-pass alpha cleanup for ghost edge prevention") do
+        options[:multi_pass] = true
+      end
+
+      opts.on("--prevent-ghost-edges", "Alias for --multi-pass") do
+        options[:multi_pass] = true
+      end
+
+      opts.on("--edge-sample-depth N", Integer, "Edge sampling depth in pixels (default: 10)") do |n|
+        options[:edge_sample_depth] = n
+      end
+
+      opts.on("--edge-sample-pattern PATTERN", [:linear, :weighted],
+              "Sampling pattern: linear or weighted (default: linear)") do |pattern|
+        options[:edge_sample_pattern] = pattern.to_s
+      end
+
+      opts.on("--color-space SPACE", [:rgb, :lab],
+              "Color matching space: rgb or lab (default: rgb)") do |space|
+        options[:color_space] = space.to_s
+      end
+
+      opts.on("--threshold-stepping", "Enable threshold stepping (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)") do
+        options[:threshold_stepping] = true
+      end
+
+      opts.on("--remove-smoke", "Detect and remove transparency gradients (smoke effects)") do
+        options[:remove_smoke] = true
+      end
+
+      opts.on("--bg-fuzz N", Float, "Background color tolerance percentage (default: 10)") do |n|
+        options[:bg_fuzz] = n
+      end
+
+      opts.on("--ghost-threshold N", Float, "Ghost edge detection threshold (default: 30)") do |n|
+        options[:ghost_threshold] = n
+      end
+
+      opts.separator ""
       opts.separator "Operation Order:"
 
       opts.on("--order ORDER", [:scale_first, :bg_first],
