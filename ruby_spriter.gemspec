@@ -8,11 +8,13 @@ Gem::Specification.new do |spec|
   spec.authors       = ['scooter-indie']
   spec.email         = ['scooter-indie@users.noreply.github.com']
 
-  spec.summary       = 'MP4 to Spritesheet converter with GIMP image processing'
+  spec.summary       = 'Professional MP4 to Spritesheet converter with advanced GIMP image processing'
   spec.description   = <<~DESC
-    Ruby Spriter is a cross-platform tool for creating spritesheets from video files
-    and processing them with GIMP. Features include background removal, scaling,
-    consolidation, and metadata management.
+    Ruby Spriter is a cross-platform tool for creating professional spritesheets from video files
+    with advanced GIMP image processing. Features include edge-based and inner background removal,
+    multi-threshold processing, ghost edge prevention, smoke detection, scaling with multiple
+    interpolation methods, sharpening, batch processing, spritesheet consolidation, frame extraction,
+    and comprehensive metadata management. Designed for game development workflows with Godot Engine.
   DESC
   spec.homepage      = 'https://github.com/scooter-indie/ruby-spriter'
   spec.license       = 'MIT'

@@ -21,6 +21,12 @@ require_relative 'ruby_spriter/utils/spritesheet_splitter'
 require_relative 'ruby_spriter/platform'
 require_relative 'ruby_spriter/dependency_checker'
 require_relative 'ruby_spriter/metadata_manager'
+require_relative 'ruby_spriter/inner_bg_config'
+require_relative 'ruby_spriter/edge_sampler'
+require_relative 'ruby_spriter/inner_background_processor'
+require_relative 'ruby_spriter/threshold_stepper'
+require_relative 'ruby_spriter/ghost_edge_cleaner'
+require_relative 'ruby_spriter/smoke_detector'
 
 # Load processors
 require_relative 'ruby_spriter/video_processor'
