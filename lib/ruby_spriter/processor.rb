@@ -783,33 +783,71 @@ module RubySpriter
     end
 
     def process_threshold_stepping(input_file, intermediate_files)
-      Utils::OutputFormatter.header("THRESHOLD STEPPING")
-      Utils::OutputFormatter.indent("Processing with multiple fuzzy select thresholds...")
+      Utils::OutputFormatter.header('Threshold Stepping Background Removal')
 
-      # Create configuration from options
-      config = InnerBgConfig.new(options)
+      # Step 1: Sample edges to build background palette
+      Utils::OutputFormatter.indent('Sampling image edges for background colors...')
+      config = InnerBgConfig.new(
+        edge_sample_interval: options[:edge_sample_interval] || 5,
+        edge_sample_depth: options[:edge_sample_depth] || 2,
+        threshold_stepping: true
+      )
 
-      # Create output file path
+      edge_sampler = EdgeSampler.new(input_file, config)
+      samples = edge_sampler.sample_edges
+      background_palette = edge_sampler.build_color_palette(samples)
+
+      # Report edge sampling results
+      edge_report = edge_sampler.report
+      Utils::OutputFormatter.indent("  Samples collected: #{edge_report[:samples_collected]}")
+      Utils::OutputFormatter.indent("  Unique colors: #{edge_report[:unique_colors]}")
+
+      if background_palette.empty?
+        Utils::OutputFormatter.indent('WARNING: No background colors detected, using fallback')
+        background_palette = [{ r: 255, g: 255, b: 255 }]
+      end
+
+      # Step 2: Create GimpProcessor instance
+      gimp_path = Platform.find_gimp
+      gimp_version = Platform.get_gimp_version(gimp_path)
+      gimp_processor = GimpProcessor.new(gimp_path, options.merge(gimp_version: gimp_version))
+
+      # Step 3: Create output file path
       dir = File.dirname(input_file)
       basename = File.basename(input_file, '.*')
       ext = File.extname(input_file)
       output_file = File.join(dir, "#{basename}_threshold_stepped#{ext}")
 
-      # Process threshold stepping
-      stepper = ThresholdStepper.new(input_file, output_file, config)
+      # Step 4: Apply threshold stepping with GIMP
+      Utils::OutputFormatter.indent('Applying threshold-based removal with GIMP...')
+      threshold_options = options.merge(
+        threshold_values: options[:threshold_values],
+        threshold_timeout: options[:threshold_timeout] || 60,
+        total_threshold_timeout: options[:total_threshold_timeout] || 300
+      )
+
+      stepper = ThresholdStepper.new(
+        input_file,
+        output_file,
+        background_palette,
+        gimp_processor,
+        threshold_options
+      )
+
       stepper.process
 
-      # Display processing report
+      # Report results
       report = stepper.report
-      Utils::OutputFormatter.indent("Thresholds processed: #{report[:thresholds_processed].join(', ')}")
-      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+      Utils::OutputFormatter.indent("  Thresholds processed: #{report[:thresholds_processed]}")
+      Utils::OutputFormatter.indent("  Skipped thresholds: #{report[:skipped_thresholds]}") if report[:skipped_thresholds] > 0
+      Utils::OutputFormatter.indent("  Processing time: #{report[:total_time]}s")
 
       # Track input file for cleanup if it's an intermediate file
       if input_file != options[:image]
         intermediate_files << input_file unless intermediate_files.include?(input_file)
       end
 
-      Utils::OutputFormatter.success("Threshold stepping complete")
+      Utils::OutputFormatter.success('Threshold stepping complete')
       output_file
     end
 
