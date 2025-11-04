@@ -8,7 +8,7 @@
 ### Fixed
 - **Threshold Stepping**: Corrected to use GIMP Python-fu with edge-sampled background palette instead of ImageMagick "-transparent white"
 - **Edge Sampling**: Implemented dense shallow sampling strategy (every 5px at depth=2) to capture highly varied backgrounds
-- **Processing Order**: Fixed --try-inner to run BEFORE GIMP edge removal, ensuring background colors are available for sampling
+- **Processing Order**: Edge sampling happens first, capturing background palette before any removal. When using --try-inner, GIMP fuzzy select removes outer background first, then inner removal processes interior regions using the pre-sampled palette. This order is faster as inner removal has less area to process after GIMP clears edges.
 - **GIMP Integration**: Threshold stepping now uses gimp-image-select-color with threshold parameter for each sampled background color
 - **Edge Artifact Avoidance**: Edge sampling now skips absolute edge pixels (pixel 0) to avoid compression artifacts
 
@@ -26,8 +26,10 @@
 ### Technical Details
 - ThresholdStepper now generates GIMP Python-fu scripts for each threshold value
 - EdgeSampler captures comprehensive color palettes from varied backgrounds
-- Processing pipeline: edge sampling ? GIMP threshold stepping ? inner removal ? done
+- Processing pipeline with --try-inner: edge sampling → background palette → GIMP fuzzy select → inner removal → done
+- Processing pipeline with --threshold-stepping: edge sampling → background palette → GIMP threshold stepping → inner removal (if enabled) → done
 - GIMP fuzzy select skipped when --threshold-stepping is used (no redundant processing)
+- Pre-sampling edges allows inner removal to work after GIMP has already cleared outer background, making it significantly faster
 
 
 All notable changes to Ruby Spriter will be documented in this file.

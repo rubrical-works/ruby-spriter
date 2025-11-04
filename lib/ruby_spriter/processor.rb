@@ -444,6 +444,7 @@ module RubySpriter
     def execute_image_workflow
       working_file = options[:image]
       intermediate_files = []
+      @background_palette = nil
 
       # Handle metadata addition workflow first
       if options[:add_meta]
@@ -455,34 +456,49 @@ module RubySpriter
         return execute_extract_workflow
       end
 
-      # STEP 1: Threshold stepping (if enabled) - applied before GIMP
-      if options[:threshold_stepping] && options[:remove_bg]
-        working_file = process_threshold_stepping(working_file, intermediate_files)
+      # STEP 1: Sample edges ONCE if needed for background removal operations
+      if options[:remove_bg] && (options[:threshold_stepping] || options[:try_inner])
+        @background_palette = sample_edge_colors(working_file)
       end
 
-      # STEP 2: Apply GIMP processing if requested (edge-based background removal)
-      if needs_gimp?
+      # STEP 2: Apply operations in correct order based on flags
+      if options[:threshold_stepping] && options[:remove_bg]
+        # Threshold stepping (uses background_palette, skips GIMP fuzzy select)
+        working_file = process_threshold_stepping(working_file, intermediate_files, @background_palette)
+
+        # Inner removal after threshold stepping (if requested)
+        if options[:try_inner]
+          working_file = process_inner_background_removal(working_file, intermediate_files, @background_palette)
+        end
+
+      elsif options[:try_inner] && options[:remove_bg]
+        # CORRECT ORDER: GIMP fuzzy select FIRST, then inner removal
+        # GIMP removes outer background quickly, leaving less work for inner removal
         initial_file = working_file
         working_file = process_with_gimp(working_file)
+        if working_file != initial_file
+          intermediate_files = collect_intermediate_files(initial_file, working_file)
+        end
 
-        # Track intermediate files for cleanup (everything except initial and final)
+        # Inner removal processes interior using pre-sampled background_palette
+        working_file = process_inner_background_removal(working_file, intermediate_files, @background_palette)
+
+      elsif needs_gimp?
+        # Traditional GIMP processing only (no threshold stepping, no inner removal)
+        initial_file = working_file
+        working_file = process_with_gimp(working_file)
         if working_file != initial_file
           intermediate_files = collect_intermediate_files(initial_file, working_file)
         end
       end
 
-      # STEP 3: Apply inner background removal if requested (after GIMP)
-      if options[:try_inner] && options[:remove_bg]
-        working_file = process_inner_background_removal(working_file, intermediate_files)
-      end
-
-      # STEP 4: Ghost edge cleaning (if multi-pass enabled)
+      # STEP 3: Ghost edge cleaning (if multi-pass enabled)
       if options[:multi_pass] && options[:remove_bg]
         working_file = process_ghost_edge_cleaning(working_file, intermediate_files)
       end
 
-      # STEP 5: Smoke detection and removal (detection always active when removing bg)
-      if options[:remove_bg]
+      # STEP 4: Smoke detection and removal (only if explicitly enabled)
+      if options[:remove_smoke] == true
         working_file = process_smoke_detection(working_file, intermediate_files)
       end
 
@@ -732,7 +748,36 @@ module RubySpriter
       gimp_processor.process(input_file)
     end
 
-    def process_inner_background_removal(input_file, intermediate_files)
+    def sample_edge_colors(input_file)
+      Utils::OutputFormatter.header("EDGE SAMPLING")
+      Utils::OutputFormatter.indent("Sampling image edges for background colors...")
+
+      # Create configuration from options
+      config = InnerBgConfig.new(
+        edge_sample_interval: options[:edge_sample_interval] || 5,
+        edge_sample_depth: options[:edge_sample_depth] || 2
+      )
+
+      # Sample edges and build color palette
+      sampler = EdgeSampler.new(input_file, config)
+      samples = sampler.sample_edges
+      background_palette = sampler.build_color_palette(samples)
+
+      # Report sampling results
+      edge_report = sampler.report
+      Utils::OutputFormatter.indent("Samples collected: #{edge_report[:samples_collected]}")
+      Utils::OutputFormatter.indent("Unique colors: #{edge_report[:unique_colors]}")
+
+      if background_palette.empty?
+        Utils::OutputFormatter.indent("⚠️  No background colors detected, using fallback")
+        background_palette = [{ r: 255, g: 255, b: 255 }]
+      end
+
+      Utils::OutputFormatter.success("Edge sampling complete (#{background_palette.length} color(s))")
+      background_palette
+    end
+
+    def process_inner_background_removal(input_file, intermediate_files, background_palette = nil)
       Utils::OutputFormatter.header("INNER BACKGROUND REMOVAL")
       Utils::OutputFormatter.indent("Detecting and removing interior background regions...")
 
@@ -745,17 +790,19 @@ module RubySpriter
         return input_file
       end
 
-      # Sample edge colors to build background palette
-      Utils::OutputFormatter.indent("Sampling edge colors...")
-      sampler = EdgeSampler.new(input_file, config)
-      background_palette = sampler.sample_edges.then { |samples| sampler.build_color_palette(samples) }
+      # Use provided palette or sample edges (backward compatibility)
+      if background_palette.nil?
+        Utils::OutputFormatter.indent("Sampling edge colors...")
+        sampler = EdgeSampler.new(input_file, config)
+        background_palette = sampler.sample_edges.then { |samples| sampler.build_color_palette(samples) }
 
-      if background_palette.empty?
-        Utils::OutputFormatter.indent("⚠️  No background colors detected. Skipping inner removal.")
-        return input_file
+        if background_palette.empty?
+          Utils::OutputFormatter.indent("⚠️  No background colors detected. Skipping inner removal.")
+          return input_file
+        end
       end
 
-      Utils::OutputFormatter.indent("Found #{background_palette.length} background color(s)")
+      Utils::OutputFormatter.indent("Using #{background_palette.length} background color(s)")
 
       # Create output file path (unique to avoid conflicts)
       dir = File.dirname(input_file)
@@ -782,32 +829,36 @@ module RubySpriter
       output_file
     end
 
-    def process_threshold_stepping(input_file, intermediate_files)
+    def process_threshold_stepping(input_file, intermediate_files, background_palette = nil)
       Utils::OutputFormatter.header('Threshold Stepping Background Removal')
 
-      # Step 1: Sample edges to build background palette
-      Utils::OutputFormatter.indent('Sampling image edges for background colors...')
-      config = InnerBgConfig.new(
-        edge_sample_interval: options[:edge_sample_interval] || 5,
-        edge_sample_depth: options[:edge_sample_depth] || 2,
-        threshold_stepping: true
-      )
+      # Use provided palette or sample edges (backward compatibility)
+      if background_palette.nil?
+        Utils::OutputFormatter.indent('Sampling image edges for background colors...')
+        config = InnerBgConfig.new(
+          edge_sample_interval: options[:edge_sample_interval] || 5,
+          edge_sample_depth: options[:edge_sample_depth] || 2,
+          threshold_stepping: true
+        )
 
-      edge_sampler = EdgeSampler.new(input_file, config)
-      samples = edge_sampler.sample_edges
-      background_palette = edge_sampler.build_color_palette(samples)
+        edge_sampler = EdgeSampler.new(input_file, config)
+        samples = edge_sampler.sample_edges
+        background_palette = edge_sampler.build_color_palette(samples)
 
-      # Report edge sampling results
-      edge_report = edge_sampler.report
-      Utils::OutputFormatter.indent("  Samples collected: #{edge_report[:samples_collected]}")
-      Utils::OutputFormatter.indent("  Unique colors: #{edge_report[:unique_colors]}")
+        # Report edge sampling results
+        edge_report = edge_sampler.report
+        Utils::OutputFormatter.indent("  Samples collected: #{edge_report[:samples_collected]}")
+        Utils::OutputFormatter.indent("  Unique colors: #{edge_report[:unique_colors]}")
 
-      if background_palette.empty?
-        Utils::OutputFormatter.indent('WARNING: No background colors detected, using fallback')
-        background_palette = [{ r: 255, g: 255, b: 255 }]
+        if background_palette.empty?
+          Utils::OutputFormatter.indent('WARNING: No background colors detected, using fallback')
+          background_palette = [{ r: 255, g: 255, b: 255 }]
+        end
+      else
+        Utils::OutputFormatter.indent("Using #{background_palette.length} background color(s) from edge sampling")
       end
 
-      # Step 2: Create GimpProcessor instance
+      # Create GimpProcessor instance
       gimp_path = Platform.find_gimp
       gimp_version = Platform.get_gimp_version(gimp_path)
       gimp_processor = GimpProcessor.new(gimp_path, options.merge(gimp_version: gimp_version))

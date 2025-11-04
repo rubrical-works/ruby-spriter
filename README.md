@@ -114,11 +114,14 @@ ruby bin/ruby_spriter --image sprite.png \
 ```
 
 **Processing Order:**
-1. Threshold stepping (if enabled)
-2. Edge-based background removal (GIMP)
-3. Inner background removal (if --try-inner)
-4. Ghost edge cleaning (if --multi-pass)
-5. Smoke detection/removal (detection always active with --remove-bg)
+1. Edge sampling (if --try-inner or --threshold-stepping) - captures background palette
+2. Threshold stepping (if enabled) - OR -
+3. Edge-based background removal (GIMP fuzzy select)
+4. Inner background removal (if --try-inner) - uses pre-sampled palette
+5. Ghost edge cleaning (if --multi-pass)
+6. Smoke detection/removal (detection always active with --remove-bg)
+
+**Note:** When using --try-inner without --threshold-stepping, GIMP removes outer background first, then inner removal processes interior regions. This order is faster as inner removal has less area to process after GIMP clears edges.
 
 ---
 
