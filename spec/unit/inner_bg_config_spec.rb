@@ -23,12 +23,12 @@ RSpec.describe RubySpriter::InnerBgConfig do
         expect(subject.multi_pass).to be false
       end
 
-      it 'sets edge_sample_depth to 10 pixels by default' do
-        expect(subject.edge_sample_depth).to eq(10)
+      it 'sets edge_sample_depth to 2 pixels by default' do
+        expect(subject.edge_sample_depth).to eq(2)
       end
 
-      it 'sets edge_sample_pattern to linear by default' do
-        expect(subject.edge_sample_pattern).to eq('linear')
+      it 'sets edge_sample_interval to 5 pixels by default' do
+        expect(subject.edge_sample_interval).to eq(5)
       end
 
       it 'sets color_space to rgb by default' do
@@ -60,7 +60,7 @@ RSpec.describe RubySpriter::InnerBgConfig do
           adaptive_min_area: true,
           multi_pass: true,
           edge_sample_depth: 15,
-          edge_sample_pattern: 'weighted',
+          edge_sample_interval: 3,
           color_space: 'lab',
           threshold_stepping: true,
           remove_smoke: true,
@@ -77,7 +77,7 @@ RSpec.describe RubySpriter::InnerBgConfig do
         expect(subject.adaptive_min_area).to be true
         expect(subject.multi_pass).to be true
         expect(subject.edge_sample_depth).to eq(15)
-        expect(subject.edge_sample_pattern).to eq('weighted')
+        expect(subject.edge_sample_interval).to eq(3)
         expect(subject.color_space).to eq('lab')
         expect(subject.threshold_stepping).to be true
         expect(subject.remove_smoke).to be true
@@ -93,14 +93,6 @@ RSpec.describe RubySpriter::InnerBgConfig do
 
       it 'returns true for default configuration' do
         expect(subject.valid?).to be true
-      end
-    end
-
-    context 'with invalid edge_sample_pattern' do
-      subject { described_class.new(edge_sample_pattern: 'invalid') }
-
-      it 'returns false' do
-        expect(subject.valid?).to be false
       end
     end
 
@@ -198,7 +190,7 @@ RSpec.describe RubySpriter::InnerBgConfig do
       expect(hash[:inner_min_area]).to eq(200)
       expect(hash.keys).to include(
         :try_inner, :inner_min_area, :adaptive_min_area, :multi_pass,
-        :edge_sample_depth, :edge_sample_pattern, :color_space,
+        :edge_sample_depth, :edge_sample_interval, :color_space,
         :threshold_stepping, :remove_smoke, :bg_fuzz, :ghost_threshold
       )
     end

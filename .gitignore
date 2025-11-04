@@ -1,3 +1,7 @@
+# Diffs and debugs
+*.diff.txt
+*.debug.txt
+
 # Ruby
 *.gem
 *.rbc

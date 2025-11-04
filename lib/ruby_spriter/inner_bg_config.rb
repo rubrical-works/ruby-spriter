@@ -8,7 +8,7 @@ module RubySpriter
                   :adaptive_min_area,
                   :multi_pass,
                   :edge_sample_depth,
-                  :edge_sample_pattern,
+                  :edge_sample_interval,
                   :color_space,
                   :threshold_stepping,
                   :remove_smoke,
@@ -21,8 +21,8 @@ module RubySpriter
       inner_min_area: 100,              # Fixed default: 100 pixels
       adaptive_min_area: false,         # 1% of image area when enabled
       multi_pass: false,
-      edge_sample_depth: 10,            # 10 pixels inward from edges
-      edge_sample_pattern: 'linear',    # 'linear' or 'weighted'
+      edge_sample_depth: 2,             # 2 pixels inward from edges (changed from 10)
+      edge_sample_interval: 5,          # Sample every 5 pixels along edges (NEW)
       color_space: 'rgb',               # 'rgb' or 'lab'
       threshold_stepping: false,
       remove_smoke: false,
@@ -38,8 +38,7 @@ module RubySpriter
 
     # Validate configuration
     def valid?
-      validate_edge_sample_pattern &&
-        validate_color_space &&
+      validate_color_space &&
         validate_numeric_ranges
     end
 
@@ -64,7 +63,7 @@ module RubySpriter
         adaptive_min_area: @adaptive_min_area,
         multi_pass: @multi_pass,
         edge_sample_depth: @edge_sample_depth,
-        edge_sample_pattern: @edge_sample_pattern,
+        edge_sample_interval: @edge_sample_interval,
         color_space: @color_space,
         threshold_stepping: @threshold_stepping,
         remove_smoke: @remove_smoke,
@@ -75,10 +74,6 @@ module RubySpriter
 
     private
 
-    def validate_edge_sample_pattern
-      %w[linear weighted].include?(@edge_sample_pattern)
-    end
-
     def validate_color_space
       %w[rgb lab].include?(@color_space)
     end
@@ -86,6 +81,7 @@ module RubySpriter
     def validate_numeric_ranges
       @inner_min_area > 0 &&
         @edge_sample_depth > 0 &&
+        @edge_sample_interval > 0 &&
         @bg_fuzz >= 0 && @bg_fuzz <= 100 &&
         @ghost_threshold >= 0 && @ghost_threshold <= 255
     end

@@ -3,7 +3,32 @@
 
 ### **CHANGELOG.md**
 ```markdown
-# Changelog
+## [0.7.0.1] - 2025-11-03
+
+### Fixed
+- **Threshold Stepping**: Corrected to use GIMP Python-fu with edge-sampled background palette instead of ImageMagick "-transparent white"
+- **Edge Sampling**: Implemented dense shallow sampling strategy (every 5px at depth=2) to capture highly varied backgrounds
+- **Processing Order**: Fixed --try-inner to run BEFORE GIMP edge removal, ensuring background colors are available for sampling
+- **GIMP Integration**: Threshold stepping now uses gimp-image-select-color with threshold parameter for each sampled background color
+- **Edge Artifact Avoidance**: Edge sampling now skips absolute edge pixels (pixel 0) to avoid compression artifacts
+
+### Changed
+- `--edge-sample-depth` default changed from 10 to 2 pixels (dense shallow sampling)
+- Edge sampling pattern simplified to always use dense shallow approach (removed --edge-sample-pattern)
+
+### Added
+- `--edge-sample-interval` parameter (default: 5) to control sampling density along edges
+- `--threshold-timeout` parameter (default: 60s) for per-threshold processing timeout
+- `--total-threshold-timeout` parameter (default: 300s) for total threshold stepping timeout
+- Timeout protection with graceful fallback to partial results
+- Video and batch mode support for --threshold-stepping and --try-inner
+
+### Technical Details
+- ThresholdStepper now generates GIMP Python-fu scripts for each threshold value
+- EdgeSampler captures comprehensive color palettes from varied backgrounds
+- Processing pipeline: edge sampling ? GIMP threshold stepping ? inner removal ? done
+- GIMP fuzzy select skipped when --threshold-stepping is used (no redundant processing)
+
 
 All notable changes to Ruby Spriter will be documented in this file.
 

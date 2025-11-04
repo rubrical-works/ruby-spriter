@@ -4,6 +4,7 @@ require 'open3'
 
 module RubySpriter
   # EdgeSampler samples pixel colors from image edges for background detection
+  # Uses dense shallow sampling strategy to capture varied backgrounds
   class EdgeSampler
     attr_reader :image_path, :config, :samples, :outliers
 
@@ -19,13 +20,11 @@ module RubySpriter
     # Sample colors from all four edges
     def sample_edges
       load_image_dimensions
-
       @samples = []
       @samples += sample_top_edge
       @samples += sample_bottom_edge
       @samples += sample_left_edge
       @samples += sample_right_edge
-
       @samples
     end
 
@@ -47,7 +46,6 @@ module RubySpriter
 
       # Find colors that are significantly different (threshold: 50 units in RGB space)
       outlier_threshold = 50
-
       @outliers = samples.select do |color|
         distance = Math.sqrt(
           (color[:r] - avg_r)**2 +
@@ -66,7 +64,8 @@ module RubySpriter
         samples_collected: @samples.length,
         unique_colors: build_color_palette(@samples).length,
         outliers_detected: @outliers.length,
-        sampling_pattern: @config.edge_sample_pattern
+        edge_sample_interval: @config.edge_sample_interval,
+        edge_sample_depth: @config.edge_sample_depth
       }
     end
 
@@ -84,106 +83,57 @@ module RubySpriter
       @image_width, @image_height = stdout.strip.split.map(&:to_i)
     end
 
+    # Dense shallow sampling: sample every N pixels at depth=1 (second pixel from edge)
+    # Avoids absolute edge pixels (0 and max-1) to prevent compression artifacts
     def sample_top_edge
-      depth = @config.edge_sample_depth
       samples = []
+      interval = @config.edge_sample_interval || 5
+      y = 1  # Second pixel from top, avoiding y=0
 
-      if @config.edge_sample_pattern == 'linear'
-        # Sample evenly across the top edge
-        step = [@image_width / 10, 1].max
-        (0...@image_width).step(step) do |x|
-          (0...depth).each do |y|
-            samples << sample_pixel(x, y)
-          end
-        end
-      else
-        # Weighted: more samples at corners
-        samples += sample_corner_region(0, 0, depth, depth)
-        samples += sample_corner_region(@image_width - depth, 0, depth, depth)
+      # Start from interval (not 0) to avoid x=0, sample up to width-2 to avoid x=width-1
+      (interval...(@image_width - 1)).step(interval) do |x|
+        samples << sample_pixel(x, y)
       end
 
       samples.compact
     end
 
     def sample_bottom_edge
-      depth = @config.edge_sample_depth
       samples = []
+      interval = @config.edge_sample_interval || 5
+      y = @image_height - 2  # Second pixel from bottom, avoiding y=height-1
 
-      if @config.edge_sample_pattern == 'linear'
-        step = [@image_width / 10, 1].max
-        (0...@image_width).step(step) do |x|
-          ((@image_height - depth)...@image_height).each do |y|
-            samples << sample_pixel(x, y)
-          end
-        end
-      else
-        # Weighted: more samples at corners
-        samples += sample_corner_region(0, @image_height - depth, depth, depth)
-        samples += sample_corner_region(@image_width - depth, @image_height - depth, depth, depth)
+      # Start from interval (not 0) to avoid x=0, sample up to width-2 to avoid x=width-1
+      (interval...(@image_width - 1)).step(interval) do |x|
+        samples << sample_pixel(x, y)
       end
 
       samples.compact
     end
 
     def sample_left_edge
-      depth = @config.edge_sample_depth
       samples = []
+      interval = @config.edge_sample_interval || 5
+      x = 1  # Second pixel from left, avoiding x=0
 
-      if @config.edge_sample_pattern == 'linear'
-        step = [@image_height / 10, 1].max
-        (0...@image_height).step(step) do |y|
-          (0...depth).each do |x|
-            samples << sample_pixel(x, y)
-          end
-        end
-      else
-        # Weighted pattern already sampled corners
-        # Sample middle section
-        mid_start = @image_height / 3
-        mid_end = (2 * @image_height) / 3
-        (mid_start...mid_end).step(10) do |y|
-          (0...depth).each do |x|
-            samples << sample_pixel(x, y)
-          end
-        end
+      # Start from interval (not 0) to avoid y=0, sample up to height-2 to avoid y=height-1
+      (interval...(@image_height - 1)).step(interval) do |y|
+        samples << sample_pixel(x, y)
       end
 
       samples.compact
     end
 
     def sample_right_edge
-      depth = @config.edge_sample_depth
       samples = []
+      interval = @config.edge_sample_interval || 5
+      x = @image_width - 2  # Second pixel from right, avoiding x=width-1
 
-      if @config.edge_sample_pattern == 'linear'
-        step = [@image_height / 10, 1].max
-        (0...@image_height).step(step) do |y|
-          ((@image_width - depth)...@image_width).each do |x|
-            samples << sample_pixel(x, y)
-          end
-        end
-      else
-        # Weighted pattern already sampled corners
-        # Sample middle section
-        mid_start = @image_height / 3
-        mid_end = (2 * @image_height) / 3
-        (mid_start...mid_end).step(10) do |y|
-          ((@image_width - depth)...@image_width).each do |x|
-            samples << sample_pixel(x, y)
-          end
-        end
+      # Start from interval (not 0) to avoid y=0, sample up to height-2 to avoid y=height-1
+      (interval...(@image_height - 1)).step(interval) do |y|
+        samples << sample_pixel(x, y)
       end
 
-      samples.compact
-    end
-
-    def sample_corner_region(start_x, start_y, width, height)
-      samples = []
-      (start_x...(start_x + width)).each do |x|
-        (start_y...(start_y + height)).each do |y|
-          samples << sample_pixel(x, y)
-        end
-      end
       samples.compact
     end
 
