@@ -16,7 +16,13 @@
       "Bash(timeout 10 gimp-console:*)",
       "Bash(timeout 5 gimp:*)",
       "Bash(timeout 10 gimp:*)",
-      "Bash(gimp-console:*)"
+      "Bash(gimp-console:*)",
+      "Bash(magick:*)",
+      "Bash(ruby -c:*)",
+      "Bash(Select-String -Pattern \"(preserves fully opaque|maintains sprite RGB|examples,|Failures:)\" -Context 1,1)",
+      "Bash(cat:*)",
+      "Bash(ruby -i -pe:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

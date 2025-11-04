@@ -264,6 +264,10 @@ module RubySpriter
         options[:edge_sample_pattern] = pattern.to_s
       end
 
+      opts.on("--edge-sample-interval N", Integer, "Edge sampling interval in pixels (default: 5)") do |n|
+        options[:edge_sample_interval] = n
+      end
+
       opts.on("--color-space SPACE", [:rgb, :lab],
               "Color matching space: rgb or lab (default: rgb)") do |space|
         options[:color_space] = space.to_s
@@ -271,6 +275,14 @@ module RubySpriter
 
       opts.on("--threshold-stepping", "Enable threshold stepping (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)") do
         options[:threshold_stepping] = true
+      end
+
+      opts.on("--threshold-timeout N", Integer, "Per-threshold timeout in seconds (default: 60)") do |n|
+        options[:threshold_timeout] = n
+      end
+
+      opts.on("--total-threshold-timeout N", Integer, "Total threshold stepping timeout in seconds (default: 300)") do |n|
+        options[:total_threshold_timeout] = n
       end
 
       opts.on("--remove-smoke", "Detect and remove transparency gradients (smoke effects)") do
@@ -450,11 +462,14 @@ module RubySpriter
       puts "    --inner-min-area N             └─ Minimum area threshold in pixels (default: 100)"
       puts "    --adaptive-min-area            └─ Use 1% of image area as threshold"
       puts "    --edge-sample-depth N          └─ Edge sampling depth in pixels (default: 10)"
+      puts "    --edge-sample-interval N       └─ Edge sampling interval in pixels (default: 5)"
       puts "    --edge-sample-pattern PATTERN  └─ Pattern: linear or weighted (default: linear)"
       puts "    --color-space SPACE            └─ Color space: rgb or lab (default: rgb)"
       puts "    --bg-fuzz N                    └─ Background tolerance % (default: 10)"
       puts ""
       puts "  --threshold-stepping             Multi-threshold processing (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)"
+      puts "    --threshold-timeout N          └─ Per-threshold timeout in seconds (default: 60)"
+      puts "    --total-threshold-timeout N    └─ Total timeout in seconds (default: 300)"
       puts ""
       puts "  --multi-pass                     Ghost edge prevention (multi-pass alpha cleanup)"
       puts "    --ghost-threshold N            └─ Ghost detection threshold 0-255 (default: 30)"
@@ -517,11 +532,14 @@ module RubySpriter
       puts "    --inner-min-area N             └─ Minimum area threshold in pixels (default: 100)"
       puts "    --adaptive-min-area            └─ Use 1% of image area as threshold"
       puts "    --edge-sample-depth N          └─ Edge sampling depth in pixels (default: 10)"
+      puts "    --edge-sample-interval N       └─ Edge sampling interval in pixels (default: 5)"
       puts "    --edge-sample-pattern PATTERN  └─ Pattern: linear or weighted (default: linear)"
       puts "    --color-space SPACE            └─ Color space: rgb or lab (default: rgb)"
       puts "    --bg-fuzz N                    └─ Background tolerance % (default: 10)"
       puts ""
       puts "  --threshold-stepping             Multi-threshold processing (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)"
+      puts "    --threshold-timeout N          └─ Per-threshold timeout in seconds (default: 60)"
+      puts "    --total-threshold-timeout N    └─ Total timeout in seconds (default: 300)"
       puts ""
       puts "  --multi-pass                     Ghost edge prevention (multi-pass alpha cleanup)"
       puts "    --ghost-threshold N            └─ Ghost detection threshold 0-255 (default: 30)"
