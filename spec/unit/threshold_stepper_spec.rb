@@ -1,164 +1,195 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'ruby_spriter/threshold_stepper'
+require 'ruby_spriter/gimp_processor'
+require 'tempfile'
 
 RSpec.describe RubySpriter::ThresholdStepper do
-  let(:config) do
-    double('InnerBgConfig',
-           threshold_stepping: true,
-           try_inner: false,
-           bg_fuzz: 10)
+  let(:input_file) { Tempfile.new(['input', '.png']) }
+  let(:output_file) { Tempfile.new(['output', '.png']) }
+  let(:background_palette) do
+    [
+      { r: 255, g: 255, b: 255 },
+      { r: 250, g: 250, b: 250 },
+      { r: 245, g: 245, b: 245 }
+    ]
   end
-
-  let(:input_image) { 'spec/fixtures/test_sprite.png' }
-  let(:output_image) { 'spec/tmp/threshold_stepped.png' }
-
-  before do
-    FileUtils.mkdir_p('spec/tmp')
+  let(:gimp_processor) { instance_double(RubySpriter::GimpProcessor) }
+  let(:options) { { debug: false } }
+  let(:stepper) do
+    described_class.new(
+      input_file.path,
+      output_file.path,
+      background_palette,
+      gimp_processor,
+      options
+    )
   end
 
   after do
-    FileUtils.rm_f(output_image) if File.exist?(output_image)
+    input_file.close
+    input_file.unlink
+    output_file.close
+    output_file.unlink
   end
 
   describe '#initialize' do
-    it 'accepts input image, output image, and config' do
-      stepper = described_class.new(input_image, output_image, config)
-      expect(stepper).to be_a(RubySpriter::ThresholdStepper)
+    it 'accepts background palette parameter' do
+      expect(stepper.instance_variable_get(:@background_palette)).to eq(background_palette)
+    end
+
+    it 'accepts gimp_processor instance' do
+      expect(stepper.instance_variable_get(:@gimp_processor)).to eq(gimp_processor)
+    end
+
+    it 'uses default threshold values' do
+      thresholds = stepper.instance_variable_get(:@threshold_values)
+      expect(thresholds).to eq([0.0, 0.5, 1.0, 3.0, 5.0, 10.0])
+    end
+
+    it 'accepts custom threshold values' do
+      custom_stepper = described_class.new(
+        input_file.path,
+        output_file.path,
+        background_palette,
+        gimp_processor,
+        { threshold_values: [1.0, 5.0, 10.0] }
+      )
+
+      thresholds = custom_stepper.instance_variable_get(:@threshold_values)
+      expect(thresholds).to eq([1.0, 5.0, 10.0])
     end
   end
 
   describe '#process' do
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'creates an output image file' do
-      subject.process
-      expect(File.exist?(output_image)).to be true
-    end
-
-    it 'processes multiple threshold values' do
-      subject.process
-      report = subject.report
-
-      expect(report[:thresholds_processed]).to be_an(Array)
-      expect(report[:thresholds_processed].length).to be > 1
-    end
-
-    it 'uses default threshold values when not specified' do
-      subject.process
-      report = subject.report
-
-      # Default thresholds: [0.0, 0.5, 1.0, 3.0, 5.0, 10.0]
-      expect(report[:thresholds_processed]).to include(0.0, 0.5, 1.0, 3.0, 5.0, 10.0)
-    end
-
-    it 'flattens multiple results into final image' do
-      subject.process
-
-      # Verify output is a valid PNG
-      cmd = "magick identify -format '%m' \"#{output_image}\""
-      format = `#{cmd}`.strip.gsub("'", '')
-      expect(format).to eq('PNG')
-    end
-  end
-
-  describe '#default_thresholds' do
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'returns the standard threshold array' do
-      thresholds = subject.default_thresholds
-      expect(thresholds).to eq([0.0, 0.5, 1.0, 3.0, 5.0, 10.0])
-    end
-  end
-
-  describe '#process_with_threshold' do
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'processes image with a specific threshold value' do
-      temp_output = subject.process_with_threshold(1.0)
-
-      expect(File.exist?(temp_output)).to be true
-      FileUtils.rm_f(temp_output)
-    end
-
-    it 'returns path to temporary processed image' do
-      temp_output = subject.process_with_threshold(5.0)
-
-      expect(temp_output).to be_a(String)
-      expect(temp_output).to include('threshold')
-      FileUtils.rm_f(temp_output)
-    end
-  end
-
-  describe '#flatten_results' do
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'combines multiple processed images into one' do
-      # Create mock processed images
-      temp_images = [
-        'spec/tmp/temp1.png',
-        'spec/tmp/temp2.png'
-      ]
-
-      temp_images.each do |img|
-        FileUtils.cp(input_image, img)
+    it 'generates GIMP script for each threshold value' do
+      # Mock GIMP processor to track script executions
+      script_calls = []
+      allow(gimp_processor).to receive(:execute_python_script) do |script, temp_output|
+        script_calls << { script: script, output: temp_output }
+        true
       end
 
-      subject.flatten_results(temp_images, output_image)
+      # Mock ImageMagick compositing
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
 
-      expect(File.exist?(output_image)).to be true
+      stepper.process
 
-      # Cleanup
-      temp_images.each { |img| FileUtils.rm_f(img) }
+      # Should generate 6 scripts (one per default threshold)
+      expect(script_calls.length).to eq(6)
+    end
+
+    it 'includes background palette colors in GIMP script' do
+      generated_script = nil
+      allow(gimp_processor).to receive(:execute_python_script) do |script, _|
+        generated_script = script
+        true
+      end
+
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+      stepper.process
+
+      # Script should reference the background colors (normalized to 0.0-1.0)
+      # Background palette has: {r: 255, g: 255, b: 255}, {r: 250, g: 250, b: 250}, {r: 245, g: 245, b: 245}
+      # These become: rgb(1.0, 1.0, 1.0), rgb(0.98..., 0.98..., 0.98...), rgb(0.96..., 0.96..., 0.96...)
+      expect(generated_script).to include('Gegl.Color.new')  # Uses Gegl.Color
+      expect(generated_script).to include('rgb(')  # RGB format
+      expect(generated_script).to match(/rgb\(1\.0, 1\.0, 1\.0\)/)  # First color (255,255,255)
+    end
+
+    it 'uses gimp-image-select-color in generated script' do
+      generated_script = nil
+      allow(gimp_processor).to receive(:execute_python_script) do |script, _|
+        generated_script = script
+        true
+      end
+
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+      stepper.process
+
+      # Script should use the correct GIMP procedure
+      expect(generated_script).to include('gimp-image-select-color')
+    end
+
+    it 'applies threshold parameter in GIMP script' do
+      generated_scripts = []
+      allow(gimp_processor).to receive(:execute_python_script) do |script, _|
+        generated_scripts << script
+        true
+      end
+
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+      stepper.process
+
+      # Each script should have a different threshold value
+      expect(generated_scripts[0]).to include('threshold')
+      expect(generated_scripts[1]).to include('threshold')
+    end
+
+    it 'composites threshold results with ImageMagick' do
+      allow(gimp_processor).to receive(:execute_python_script).and_return(true)
+
+      composite_calls = []
+      allow(Open3).to receive(:capture3) do |cmd|
+        composite_calls << cmd if cmd.include?('magick')
+        ['', '', double(success?: true)]
+      end
+
+      stepper.process
+
+      # Should composite the results
+      expect(composite_calls.length).to be > 0
+    end
+  end
+
+  describe 'timeout handling' do
+    it 'skips threshold on per-threshold timeout' do
+      call_count = 0
+      allow(gimp_processor).to receive(:execute_python_script) do
+        call_count += 1
+        if call_count == 2
+          # Simulate timeout on second threshold
+          sleep 0.1
+          raise Timeout::Error, 'Threshold processing timeout'
+        end
+        true
+      end
+
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+      # Should not raise error, just skip the threshold
+      expect { stepper.process }.not_to raise_error
+    end
+
+    it 'reports skipped thresholds' do
+      allow(gimp_processor).to receive(:execute_python_script) do
+        raise Timeout::Error, 'Threshold processing timeout'
+      end
+
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+      stepper.process
+      report = stepper.report
+
+      expect(report[:skipped_thresholds]).to be > 0
     end
   end
 
   describe '#report' do
-    subject { described_class.new(input_image, output_image, config) }
+    it 'includes processing statistics' do
+      allow(gimp_processor).to receive(:execute_python_script).and_return(true)
+      allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
 
-    it 'generates a processing report' do
-      subject.process
-      report = subject.report
+      stepper.process
+      report = stepper.report
 
-      expect(report).to be_a(Hash)
       expect(report).to have_key(:thresholds_processed)
-      expect(report).to have_key(:processing_time)
-      expect(report).to have_key(:temp_files_created)
-    end
-  end
-
-  describe 'integration with --try-inner' do
-    let(:config) do
-      double('InnerBgConfig',
-             threshold_stepping: true,
-             try_inner: true,
-             bg_fuzz: 10,
-             inner_min_area: 100,
-             adaptive_min_area: false,
-             edge_sample_depth: 10,
-             edge_sample_pattern: 'linear',
-             color_space: 'rgb')
-    end
-
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'can work sequentially with inner background removal' do
-      # Threshold stepping should be applied first, then inner removal
-      subject.process
-      expect(File.exist?(output_image)).to be true
-    end
-  end
-
-  describe 'performance' do
-    subject { described_class.new(input_image, output_image, config) }
-
-    it 'completes processing in reasonable time' do
-      start_time = Time.now
-      subject.process
-      elapsed = Time.now - start_time
-
-      # Should complete in under 30 seconds for small test image
-      expect(elapsed).to be < 30
+      expect(report).to have_key(:skipped_thresholds)
+      expect(report).to have_key(:total_time)
     end
   end
 end

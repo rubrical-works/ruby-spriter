@@ -49,6 +49,48 @@ module RubySpriter
       working_file
     end
 
+    # Execute a Python script with GIMP (used by ThresholdStepper)
+    # @param script [String] The Python script content
+    # @param output_file [String] Expected output file path
+    # @return [Boolean] True if successful, false otherwise
+    def execute_python_script(script, output_file)
+      script_file = File.join(Dir.tmpdir, "gimp_threshold_#{Time.now.to_i}_#{rand(10_000)}.py")
+      log_file = File.join(Dir.tmpdir, "gimp_threshold_log_#{Time.now.to_i}_#{rand(10_000)}.txt")
+
+      begin
+        File.write(script_file, script)
+
+        if options[:debug]
+          Utils::OutputFormatter.indent("DEBUG: Threshold script: #{script_file}")
+          Utils::OutputFormatter.indent("DEBUG: Expected output: #{output_file}")
+        end
+
+        # Execute using existing platform-specific methods
+        if Platform.windows?
+          execute_gimp_windows(script_file, log_file)
+        else
+          execute_gimp_unix(script_file, log_file)
+        end
+
+        # Check if output was created
+        if File.exist?(output_file) && File.size(output_file).positive?
+          true
+        else
+          if options[:debug]
+            Utils::OutputFormatter.indent("WARNING: Threshold script did not produce output")
+          end
+          false
+        end
+      rescue StandardError => e
+        if options[:debug]
+          Utils::OutputFormatter.indent("ERROR in threshold script: #{e.message}")
+        end
+        false
+      ensure
+        cleanup_temp_files(script_file, log_file) unless options[:keep_temp]
+      end
+    end
+
     private
 
     def gimp_major_version
