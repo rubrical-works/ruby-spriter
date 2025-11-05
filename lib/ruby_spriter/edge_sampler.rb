@@ -6,7 +6,7 @@ module RubySpriter
   # EdgeSampler samples pixel colors from image edges for background detection
   # Uses dense shallow sampling strategy to capture varied backgrounds
   class EdgeSampler
-    attr_reader :image_path, :config, :samples, :outliers
+    attr_reader :image_path, :config, :samples, :outliers, :pixel_cache
 
     def initialize(image_path, config)
       @image_path = image_path
@@ -15,11 +15,57 @@ module RubySpriter
       @outliers = []
       @image_width = nil
       @image_height = nil
+      @pixel_cache = nil  # Will hold all pixels when loaded
+    end
+
+    # Load all pixels into memory cache using ImageMagick txt: format
+    # This eliminates the need for individual pixel sampling calls
+    def load_pixel_cache
+      load_image_dimensions if @image_width.nil? || @image_height.nil?
+
+      # Use txt: format to dump all pixels in one call
+      cmd = "magick #{Utils::PathHelper.quote_path(@image_path)} txt:-"
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Failed to load pixel cache: #{stderr}"
+      end
+
+      @pixel_cache = {}
+
+      # Parse txt: format output
+      # Format: "x,y: (r,g,b) #RRGGBB colorname"
+      # or with alpha: "x,y: (r,g,b,a) #RRGGBBAA colorname"
+      stdout.each_line do |line|
+        # Skip header line
+        next if line.start_with?('#')
+
+        # Parse pixel data
+        if line =~ /^(\d+),(\d+):\s+\((\d+),(\d+),(\d+)(?:,(\d+))?\)/
+          x = $1.to_i
+          y = $2.to_i
+          r = $3.to_i
+          g = $4.to_i
+          b = $5.to_i
+          a = $6 ? $6.to_i : nil
+
+          pixel = { r: r, g: g, b: b }
+          pixel[:a] = a if a
+
+          @pixel_cache[[x, y]] = pixel
+        end
+      end
+
+      @pixel_cache
     end
 
     # Sample colors from all four edges
     def sample_edges
       load_image_dimensions
+
+      # Load all pixels into cache ONCE
+      load_pixel_cache unless @pixel_cache
+
       @samples = []
       @samples += sample_top_edge
       @samples += sample_bottom_edge
@@ -65,7 +111,8 @@ module RubySpriter
         unique_colors: build_color_palette(@samples).length,
         outliers_detected: @outliers.length,
         edge_sample_interval: @config.edge_sample_interval,
-        edge_sample_depth: @config.edge_sample_depth
+        edge_sample_depth: @config.edge_sample_depth,
+        pixel_cache_size: @pixel_cache ? @pixel_cache.length : 0
       }
     end
 
@@ -137,20 +184,20 @@ module RubySpriter
       samples.compact
     end
 
+    # Sample a single pixel - now uses cache instead of ImageMagick call
     def sample_pixel(x, y)
-      # Use ImageMagick to get pixel color at specific coordinates
-      cmd = "magick #{Utils::PathHelper.quote_path(@image_path)} -format \"%[pixel:p{#{x},#{y}}]\" info:"
+      # Return from cache if available
+      return @pixel_cache[[x, y]] if @pixel_cache
+
+      # Fallback to old method if cache not loaded (shouldn't happen)
+      cmd = "magick identify -format \"%[pixel:p{#{x},#{y}]\" #{Utils::PathHelper.quote_path(@image_path)}"
       stdout, stderr, status = Open3.capture3(cmd)
 
       return nil unless status.success?
 
-      # Parse output like "srgb(255,255,255)", "srgba(255,255,255,1.0)", or "gray(255)"
+      # Parse color from output: "srgb(255,255,255)" or "srgba(255,255,255,1.0)"
       if stdout =~ /srgba?\((\d+),(\d+),(\d+)/
         { r: $1.to_i, g: $2.to_i, b: $3.to_i }
-      elsif stdout =~ /gray\((\d+)\)/
-        # Convert grayscale to RGB
-        gray_value = $1.to_i
-        { r: gray_value, g: gray_value, b: gray_value }
       else
         nil
       end

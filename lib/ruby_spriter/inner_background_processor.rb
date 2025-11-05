@@ -3,6 +3,7 @@
 require 'open3'
 require 'fileutils'
 require 'tmpdir'
+require 'set'
 
 module RubySpriter
   # InnerBackgroundProcessor removes background colors found inside sprite boundaries (optimized version)
@@ -20,6 +21,43 @@ module RubySpriter
       @processing_time = 0
       @image_width = nil
       @image_height = nil
+      @pixel_cache = nil  # Add pixel cache support
+    end
+
+    # Load all pixels into memory cache using ImageMagick txt: format
+    def load_pixel_cache
+      load_image_dimensions if @image_width.nil? || @image_height.nil?
+
+      # Use txt: format to dump all pixels in one call
+      cmd = "magick #{Utils::PathHelper.quote_path(@input_image)} txt:-"
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Failed to load pixel cache: #{stderr}"
+      end
+
+      @pixel_cache = {}
+
+      # Parse txt: format output
+      stdout.each_line do |line|
+        next if line.start_with?('#')
+
+        if line =~ /^(\d+),(\d+):\s+\((\d+),(\d+),(\d+)(?:,(\d+))?\)/
+          x = $1.to_i
+          y = $2.to_i
+          r = $3.to_i
+          g = $4.to_i
+          b = $5.to_i
+          a = $6 ? $6.to_i : nil
+
+          pixel = { r: r, g: g, b: b }
+          pixel[:a] = a if a
+
+          @pixel_cache[[x, y]] = pixel
+        end
+      end
+
+      @pixel_cache
     end
 
     # Main processing method
@@ -29,10 +67,13 @@ module RubySpriter
       # Load image dimensions
       load_image_dimensions
 
+      # Load pixel cache ONCE for fast grid sampling
+      load_pixel_cache
+
       # Copy input to output as starting point
       FileUtils.cp(@input_image, @output_image)
 
-      # Detect inner regions (fast method using ImageMagick)
+      # Detect inner regions (fast method using pixel cache)
       @regions_detected = detect_inner_regions
 
       # Remove each detected region
@@ -51,6 +92,9 @@ module RubySpriter
     def detect_inner_regions
       # Ensure dimensions are loaded
       load_image_dimensions if @image_width.nil? || @image_height.nil?
+
+      # Ensure pixel cache is loaded
+      load_pixel_cache unless @pixel_cache
 
       regions = []
       threshold = calculate_adaptive_threshold
@@ -140,8 +184,12 @@ module RubySpriter
         (edge_margin...@image_width - edge_margin).step(step) do |x|
           # Quick check if this point matches background color
           if point_matches_color?(x, y, bg_color)
-            # Estimate region size using ImageMagick
-            area = estimate_region_area_fast(x, y, bg_color)
+            # Use cached area estimation if pixel cache is available
+            area = if @pixel_cache
+                     estimate_region_area_from_cache(x, y, bg_color, min_area)
+                   else
+                     estimate_region_area_fast(x, y, bg_color)
+                   end
 
             if area >= min_area
               regions << {
@@ -161,28 +209,83 @@ module RubySpriter
     end
 
     def point_matches_color?(x, y, bg_color)
-      # Quick pixel check using ImageMagick
-      cmd = "magick #{Utils::PathHelper.quote_path(@input_image)} -format \"%[pixel:p{#{x},#{y}}]\" info:"
-      stdout, stderr, status = Open3.capture3(cmd)
+      # Use pixel cache instead of ImageMagick call
+      pixel = @pixel_cache[[x, y]]
+      return false unless pixel
 
-      return false unless status.success?
+      # Simple RGB distance check
+      distance = Math.sqrt(
+        (pixel[:r] - bg_color[:r])**2 +
+        (pixel[:g] - bg_color[:g])**2 +
+        (pixel[:b] - bg_color[:b])**2
+      )
 
-      if stdout =~ /srgba?\((\d+),(\d+),(\d+)/
-        pixel_r, pixel_g, pixel_b = $1.to_i, $2.to_i, $3.to_i
+      # Fuzz tolerance (convert percentage to RGB distance)
+      tolerance = (@config.bg_fuzz / 100.0) * 441.67  # Max RGB distance is ~441.67
+      distance <= tolerance
+    end
 
-        # Simple RGB distance check
-        distance = Math.sqrt(
-          (pixel_r - bg_color[:r])**2 +
-          (pixel_g - bg_color[:g])**2 +
-          (pixel_b - bg_color[:b])**2
-        )
+    # Estimate region area using pixel cache (fast, no ImageMagick calls)
+    # Optimized with early termination - stops once we know if region meets min_area
+    def estimate_region_area_from_cache(x, y, bg_color, min_area = nil)
+      area, _ = estimate_region_area_from_cache_with_tracking(x, y, bg_color, min_area)
+      area
+    end
 
-        # Fuzz tolerance (convert percentage to RGB distance)
-        tolerance = (@config.bg_fuzz / 100.0) * 441.67  # Max RGB distance is ~441.67
-        distance <= tolerance
-      else
-        false
+    # Estimate region area and return visited coordinates for deduplication
+    def estimate_region_area_from_cache_with_tracking(x, y, bg_color, min_area = nil)
+      return [0, []] unless @pixel_cache
+
+      # Use flood fill algorithm on pixel cache with Set for faster lookups
+      visited_keys = Set.new
+      visited_coords = []
+      queue = [[x, y]]
+      area = 0
+      max_area = min_area ? min_area * 2 : Float::INFINITY  # Early termination threshold
+
+      while !queue.empty? && area < max_area
+        cx, cy = queue.shift
+
+        # Skip if out of bounds
+        next if cx < 0 || cy < 0 || cx >= @image_width || cy >= @image_height
+
+        # Skip if already visited (Set lookup is O(1))
+        coord_key = cx * 10000 + cy  # Pack coordinates into single integer for faster hashing
+        next if visited_keys.include?(coord_key)
+
+        # Mark as visited
+        visited_keys.add(coord_key)
+
+        # Get pixel from cache
+        pixel = @pixel_cache[[cx, cy]]
+        next unless pixel
+
+        # Check if pixel matches background color (with fuzz tolerance)
+        if colors_match?(pixel, bg_color)
+          area += 1
+          visited_coords << [cx, cy]
+
+          # Add neighbors to queue (4-way connectivity)
+          queue << [cx + 1, cy]
+          queue << [cx - 1, cy]
+          queue << [cx, cy + 1]
+          queue << [cx, cy - 1]
+        end
       end
+
+      [area, visited_coords]
+    end
+
+    # Check if two colors match within fuzz tolerance
+    def colors_match?(pixel, bg_color)
+      distance = Math.sqrt(
+        (pixel[:r] - bg_color[:r])**2 +
+        (pixel[:g] - bg_color[:g])**2 +
+        (pixel[:b] - bg_color[:b])**2
+      )
+
+      tolerance = (@config.bg_fuzz / 100.0) * 441.67
+      distance <= tolerance
     end
 
     def estimate_region_area_fast(x, y, bg_color)

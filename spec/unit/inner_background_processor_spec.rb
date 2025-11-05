@@ -238,4 +238,90 @@ RSpec.describe RubySpriter::InnerBackgroundProcessor do
       end
     end
   end
+
+  describe '#estimate_region_area_from_cache' do
+    let(:processor) { described_class.new(input_image, output_image, config, background_palette) }
+
+    before do
+      # Set image dimensions directly
+      processor.instance_variable_set(:@image_width, 10)
+      processor.instance_variable_set(:@image_height, 10)
+
+      # Create a simple 10x10 pixel cache with a region of matching colors
+      pixel_cache = {}
+      (0...10).each do |y|
+        (0...10).each do |x|
+          # Create a 3x3 region of red pixels at (2,2) to (4,4)
+          if x >= 2 && x <= 4 && y >= 2 && y <= 4
+            pixel_cache[[x, y]] = { r: 255, g: 0, b: 0 }
+          else
+            pixel_cache[[x, y]] = { r: 0, g: 255, b: 0 }
+          end
+        end
+      end
+
+      processor.instance_variable_set(:@pixel_cache, pixel_cache)
+    end
+
+    it 'estimates region area using pixel cache without calling ImageMagick' do
+      bg_color = { r: 255, g: 0, b: 0 }
+
+      # Should not call ImageMagick
+      expect(Open3).not_to receive(:capture3)
+
+      # Estimate area starting from center of red region
+      area = processor.send(:estimate_region_area_from_cache, 3, 3, bg_color)
+
+      # Should find the 3x3 = 9 pixel region
+      expect(area).to eq(9)
+    end
+
+    it 'uses flood fill algorithm to find contiguous regions' do
+      bg_color = { r: 255, g: 0, b: 0 }
+
+      area = processor.send(:estimate_region_area_from_cache, 2, 2, bg_color)
+
+      # Should find all 9 connected red pixels
+      expect(area).to eq(9)
+    end
+
+    it 'respects fuzz tolerance when matching colors' do
+      # Add a pixel cache with similar but not exact colors
+      pixel_cache = {}
+      (0...5).each do |y|
+        (0...5).each do |x|
+          # Slightly different reds (within 10% fuzz tolerance)
+          pixel_cache[[x, y]] = { r: 250 + (x % 5), g: 5, b: 5 }
+        end
+      end
+
+      processor.instance_variable_set(:@pixel_cache, pixel_cache)
+
+      bg_color = { r: 252, g: 5, b: 5 }
+
+      area = processor.send(:estimate_region_area_from_cache, 2, 2, bg_color)
+
+      # Should find all 25 pixels as they're within fuzz tolerance
+      expect(area).to be >= 20
+    end
+
+    it 'returns 0 for regions smaller than minimum area' do
+      # Single pixel region
+      pixel_cache = {}
+      (0...5).each do |y|
+        (0...5).each do |x|
+          pixel_cache[[x, y]] = { r: 0, g: 255, b: 0 }
+        end
+      end
+      pixel_cache[[2, 2]] = { r: 255, g: 0, b: 0 }
+
+      processor.instance_variable_set(:@pixel_cache, pixel_cache)
+
+      bg_color = { r: 255, g: 0, b: 0 }
+
+      area = processor.send(:estimate_region_area_from_cache, 2, 2, bg_color)
+
+      expect(area).to eq(1)
+    end
+  end
 end

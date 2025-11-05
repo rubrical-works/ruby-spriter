@@ -22,7 +22,10 @@
       "Bash(Select-String -Pattern \"(preserves fully opaque|maintains sprite RGB|examples,|Failures:)\" -Context 1,1)",
       "Bash(cat:*)",
       "Bash(ruby -i -pe:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(dir:*)",
+      "Bash(mkdir:*)",
+      "Bash(timeout 300 bundle exec rspec:*)"
     ],
     "deny": [],
     "ask": []
