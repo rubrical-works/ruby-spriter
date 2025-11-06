@@ -399,16 +399,10 @@ module RubySpriter
                 print("Added alpha channel")
             
             pdb = Gimp.get_pdb()
-            
-            # Sample all four corners
-            corners = [
-                (0, 0),           # Top-left
-                (w-1, 0),         # Top-right
-                (0, h-1),         # Bottom-left
-                (w-1, h-1)        # Bottom-right
-            ]
-            
-            print(f"Sampling {len(corners)} corners...")
+
+            # Sample from single interior point to avoid edge artifacts
+            x = 5
+            y = 5
             
         #{selection_code.split("\n").map { |line| "    " + line }.join("\n")}
             
@@ -582,16 +576,14 @@ module RubySpriter
         if not select_proc:
             raise Exception("Could not find gimp-image-select-contiguous-color procedure")
 
-        for i, (x, y) in enumerate(corners):
-            print(f"  Corner {i+1} at ({x}, {y})")
-
-            config = select_proc.create_config()
-            config.set_property('image', img)
-            config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
-            config.set_property('drawable', layer)
-            config.set_property('x', float(x))
-            config.set_property('y', float(y))
-            select_proc.run(config)
+        print(f"Sampling background at ({x}, {y})")
+        config = select_proc.create_config()
+        config.set_property('image', img)
+        config.set_property('operation', Gimp.ChannelOps.REPLACE)
+        config.set_property('drawable', layer)
+        config.set_property('x', float(x))
+        config.set_property('y', float(y))
+        select_proc.run(config)
       PYTHON
     end
 
@@ -617,16 +609,14 @@ module RubySpriter
         if not select_proc:
             raise Exception("Could not find gimp-image-select-color procedure")
 
-        for i, (x, y) in enumerate(corners):
-            print(f"  Corner {i+1} at ({x}, {y})")
-            color = layer.get_pixel(x, y)
-
-            config = select_proc.create_config()
-            config.set_property('image', img)
-            config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
-            config.set_property('drawable', layer)
-            config.set_property('color', color)
-            select_proc.run(config)
+        print(f"Sampling background at ({x}, {y})")
+        color = layer.get_pixel(x, y)
+        config = select_proc.create_config()
+        config.set_property('image', img)
+        config.set_property('operation', Gimp.ChannelOps.REPLACE)
+        config.set_property('drawable', layer)
+        config.set_property('color', color)
+        select_proc.run(config)
       PYTHON
     end
 

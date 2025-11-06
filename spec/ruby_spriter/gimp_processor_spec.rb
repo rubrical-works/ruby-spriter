@@ -379,17 +379,18 @@ RSpec.describe RubySpriter::GimpProcessor do
           expect(script).to include('gimp-image-select-contiguous-color')
         end
 
-        it 'samples all four corners' do
+        it 'samples from single interior point (not corners)' do
           script = processor_fuzzy.send(:generate_remove_bg_script, input_file, output_file)
 
-          # The procedure is looked up once, then used in a loop for all 4 corners
+          # Should use fuzzy select procedure
           expect(script).to include('gimp-image-select-contiguous-color')
-          expect(script).to include('for i, (x, y) in enumerate(corners):')
-          # Verify corners array has 4 entries
-          expect(script).to include('(0, 0)')           # Top-left
-          expect(script).to include('(w-1, 0)')         # Top-right
-          expect(script).to include('(0, h-1)')         # Bottom-left
-          expect(script).to include('(w-1, h-1)')       # Bottom-right
+          # Should sample from single interior point (5, 5) to avoid edge artifacts
+          expect(script).to include('x = 5')
+          expect(script).to include('y = 5')
+          # Should NOT loop through multiple corners
+          expect(script).not_to include('for i, (x, y) in enumerate(corners):')
+          # Should NOT use ADD operation (only REPLACE)
+          expect(script).not_to include('Gimp.ChannelOps.ADD')
         end
       end
 
@@ -411,9 +412,9 @@ RSpec.describe RubySpriter::GimpProcessor do
         it 'includes threshold parameter in global color select script' do
           script = processor_with_threshold.send(:generate_global_select_code)
 
-          # Should set threshold via context API (converted to 0-1 range)
-          expect(script).to include("Gimp.context_set_sample_threshold(0.05)")
-          expect(script).to include('5.0%')
+          # Should set threshold via context API (0-255 range)
+          expect(script).to include("Gimp.context_set_sample_threshold_int(int(5.0))")
+          expect(script).to include('Threshold: 5.0')
         end
 
         it 'uses default threshold of 15.0 when not specified' do
@@ -421,16 +422,16 @@ RSpec.describe RubySpriter::GimpProcessor do
           script = processor_default.send(:generate_global_select_code)
 
           # Should use default threshold via context API
-          expect(script).to include("Gimp.context_set_sample_threshold(0.15)")
-          expect(script).to include('15.0%')
+          expect(script).to include("Gimp.context_set_sample_threshold_int(int(15.0))")
+          expect(script).to include('Threshold: 15.0')
         end
 
         it 'uses 0.0 threshold for exact color matching when threshold is 0' do
           processor_exact = described_class.new(gimp_path, remove_bg: true, fuzzy_select: false, bg_threshold: 0.0)
           script = processor_exact.send(:generate_global_select_code)
 
-          expect(script).to include("Gimp.context_set_sample_threshold(0.0)")
-          expect(script).to include('0.0%')
+          expect(script).to include("Gimp.context_set_sample_threshold_int(int(0.0))")
+          expect(script).to include('Threshold: 0.0')
         end
       end
 
@@ -472,8 +473,8 @@ RSpec.describe RubySpriter::GimpProcessor do
           processor = described_class.new(gimp_path, remove_bg: true, fuzzy_select: false, bg_threshold: 20.0)
           code = processor.send(:generate_global_select_code)
 
-          expect(code).to include("Gimp.context_set_sample_threshold(0.2)")
-          expect(code).to include('20.0%')
+          expect(code).to include("Gimp.context_set_sample_threshold_int(int(20.0))")
+          expect(code).to include('Threshold: 20.0')
         end
 
         it 'uses bg_threshold for color tolerance in fuzzy select' do
@@ -481,8 +482,8 @@ RSpec.describe RubySpriter::GimpProcessor do
           code = processor.send(:generate_fuzzy_select_code)
 
           # Fuzzy select now supports threshold via context API
-          expect(code).to include("Gimp.context_set_sample_threshold(0.1)")
-          expect(code).to include('10.0%')
+          expect(code).to include("Gimp.context_set_sample_threshold_int(int(10.0))")
+          expect(code).to include('Threshold: 10.0')
         end
 
         it 'uses feather_radius for edge softening, independent of threshold' do
@@ -491,9 +492,9 @@ RSpec.describe RubySpriter::GimpProcessor do
           select_code = processor.send(:generate_global_select_code)
           feather_code = processor.send(:generate_feather_selection_code)
 
-          # Threshold used for color selection (converted to 0-1 range)
-          expect(select_code).to include('Gimp.context_set_sample_threshold(0.15)')
-          expect(select_code).to include('15.0%')
+          # Threshold used for color selection (0-255 range)
+          expect(select_code).to include('Gimp.context_set_sample_threshold_int(int(15.0))')
+          expect(select_code).to include('Threshold: 15.0')
 
           # Feather radius used for edge softening
           expect(feather_code).to include('2.5')
