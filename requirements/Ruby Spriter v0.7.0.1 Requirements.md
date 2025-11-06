@@ -1,6 +1,6 @@
 # Ruby Spriter v0.7.0.1 Requirements 
 
-Requirements Revision #: 5
+Requirements Revision #: 6
 Release Type: PATCH RELEASE (builds upon v0.7.0)
 Status: IN PROGRESS - Performance Optimization Complete
 Date: 2025-11-05  
@@ -879,6 +879,14 @@ ruby_spriter --image sprite.png --remove-bg
 
 ***
 
+## Resolved Issues
+
+1. **GIMP Threshold Behavior (Nov 6, 2025)** ✅ FIXED
+   - Issue: `--remove-bg --threshold 52.0` removed more pixels than GUI
+   - Cause: 4-corner selection with ADD operations compounding threshold
+   - Fix: Single-point interior selection with REPLACE mode
+   - Status: Working correctly
+
 ## Known Issues
 
 ### Minor Usability Issues (Not Blocking Release)
@@ -947,9 +955,11 @@ The `--remove-bg` feature with `--threshold` parameter does not fully match GIMP
 - ✅ Default grow changed from 1 to 0 pixels
 - ✅ Feather parameter separated from threshold
 
-**Still Broken:**
-- ❌ `--remove-bg --threshold 52.0` removes MORE pixels than GUI at threshold 52.0
-- ❌ Non-linear behavior suggests additional hidden settings or scale conversion issue
+**Fixed:**
+- ✅ `--remove-bg --threshold 52.0` now works correctly (matches GUI behavior)
+- ✅ Single-point selection implemented (5 pixels inward from top-left)
+- ✅ Removed 4-corner ADD operations that were compounding threshold effect
+- ✅ Uses REPLACE mode only (matches GUI selection behavior)
 
 ### **Investigation Findings**
 
@@ -1014,6 +1024,18 @@ The `--remove-bg` feature with `--threshold` parameter does not fully match GIMP
 - **High thresholds (41-100)**: Removes too much ❌
 - **User workaround**: Use lower threshold values until fixed
 - **Priority**: Medium (affects quality but has workaround)
+
+### **Resolution (Nov 6, 2025)**
+
+**Root Cause:** Multiple corner selection with ADD operations was compounding the threshold effect, causing more aggressive removal than GIMP GUI single-point selection.
+
+**Fix Implemented:**
+- Changed from 4-corner sampling to single interior point (5, 5)
+- Removed ChannelOps.ADD operations
+- Uses only ChannelOps.REPLACE mode
+- Avoids edge compression artifacts by sampling 5 pixels inward
+
+**Result:** `--remove-bg --threshold 52.0` now matches GUI behavior. Threshold values work consistently across the 0-100 range.
 
 ***
 
