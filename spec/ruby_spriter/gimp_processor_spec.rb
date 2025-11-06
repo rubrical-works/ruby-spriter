@@ -403,6 +403,103 @@ RSpec.describe RubySpriter::GimpProcessor do
         end
       end
 
+      describe '#generate_global_select_code' do
+        let(:processor_with_threshold) do
+          described_class.new(gimp_path, remove_bg: true, fuzzy_select: false, bg_threshold: 5.0)
+        end
+
+        it 'includes threshold parameter in global color select script' do
+          script = processor_with_threshold.send(:generate_global_select_code)
+
+          # Should set threshold via context API (converted to 0-1 range)
+          expect(script).to include("Gimp.context_set_sample_threshold(0.05)")
+          expect(script).to include('5.0%')
+        end
+
+        it 'uses default threshold of 15.0 when not specified' do
+          processor_default = described_class.new(gimp_path, remove_bg: true, fuzzy_select: false)
+          script = processor_default.send(:generate_global_select_code)
+
+          # Should use default threshold via context API
+          expect(script).to include("Gimp.context_set_sample_threshold(0.15)")
+          expect(script).to include('15.0%')
+        end
+
+        it 'uses 0.0 threshold for exact color matching when threshold is 0' do
+          processor_exact = described_class.new(gimp_path, remove_bg: true, fuzzy_select: false, bg_threshold: 0.0)
+          script = processor_exact.send(:generate_global_select_code)
+
+          expect(script).to include("Gimp.context_set_sample_threshold(0.0)")
+          expect(script).to include('0.0%')
+        end
+      end
+
+      describe '#generate_feather_selection_code' do
+        it 'returns no feathering when feather_radius is not set' do
+          processor = described_class.new(gimp_path, remove_bg: true)
+          code = processor.send(:generate_feather_selection_code)
+
+          expect(code).to include('# No feathering')
+        end
+
+        it 'returns no feathering when feather_radius is 0' do
+          processor = described_class.new(gimp_path, remove_bg: true, feather_radius: 0.0)
+          code = processor.send(:generate_feather_selection_code)
+
+          expect(code).to include('# No feathering')
+        end
+
+        it 'includes feathering code when feather_radius is set' do
+          processor = described_class.new(gimp_path, remove_bg: true, feather_radius: 2.0)
+          code = processor.send(:generate_feather_selection_code)
+
+          expect(code).to include('gimp-selection-feather')
+          expect(code).to include('2.0')
+        end
+
+        it 'uses feather_radius parameter, not bg_threshold' do
+          processor = described_class.new(gimp_path, remove_bg: true, bg_threshold: 25.0, feather_radius: 3.0)
+          code = processor.send(:generate_feather_selection_code)
+
+          # Should use feather_radius (3.0), not bg_threshold (25.0)
+          expect(code).to include('3.0')
+          expect(code).not_to include('25.0')
+        end
+      end
+
+      describe 'threshold and feathering separation' do
+        it 'uses bg_threshold for color tolerance in global select' do
+          processor = described_class.new(gimp_path, remove_bg: true, fuzzy_select: false, bg_threshold: 20.0)
+          code = processor.send(:generate_global_select_code)
+
+          expect(code).to include("Gimp.context_set_sample_threshold(0.2)")
+          expect(code).to include('20.0%')
+        end
+
+        it 'uses bg_threshold for color tolerance in fuzzy select' do
+          processor = described_class.new(gimp_path, remove_bg: true, fuzzy_select: true, bg_threshold: 10.0)
+          code = processor.send(:generate_fuzzy_select_code)
+
+          # Fuzzy select now supports threshold via context API
+          expect(code).to include("Gimp.context_set_sample_threshold(0.1)")
+          expect(code).to include('10.0%')
+        end
+
+        it 'uses feather_radius for edge softening, independent of threshold' do
+          processor = described_class.new(gimp_path, remove_bg: true, bg_threshold: 15.0, feather_radius: 2.5)
+
+          select_code = processor.send(:generate_global_select_code)
+          feather_code = processor.send(:generate_feather_selection_code)
+
+          # Threshold used for color selection (converted to 0-1 range)
+          expect(select_code).to include('Gimp.context_set_sample_threshold(0.15)')
+          expect(select_code).to include('15.0%')
+
+          # Feather radius used for edge softening
+          expect(feather_code).to include('2.5')
+        end
+      end
+
       it 'includes file paths' do
         processor_bg = described_class.new(gimp_path, remove_bg: true)
         script = processor_bg.send(:generate_remove_bg_script, input_file, output_file)

@@ -1,6 +1,6 @@
 # Ruby Spriter v0.7.0.1 Requirements 
 
-Requirements Revision #: 4
+Requirements Revision #: 5
 Release Type: PATCH RELEASE (builds upon v0.7.0)
 Status: IN PROGRESS - Performance Optimization Complete
 Date: 2025-11-05  
@@ -929,6 +929,91 @@ ruby_spriter --image sprite.png --remove-bg
 - No per-threshold timeout
 - No total process timeout
 - Impact: GIMP can hang indefinitely on complex images
+
+***
+
+## **CRITICAL ISSUE: GIMP Threshold Behavior (Nov 6, 2025)**
+
+### **Problem Statement**
+
+The `--remove-bg` feature with `--threshold` parameter does not fully match GIMP GUI behavior at higher threshold values.
+
+### **Current Status**
+
+**Partially Working:**
+- ✅ `--remove-bg` (no threshold) now works correctly
+- ✅ `--remove-bg --threshold 15.0` matches GUI at threshold 15.0
+- ✅ Context setters implemented (`context_set_sample_threshold_int`, `context_set_antialias`, etc.)
+- ✅ Default grow changed from 1 to 0 pixels
+- ✅ Feather parameter separated from threshold
+
+**Still Broken:**
+- ❌ `--remove-bg --threshold 52.0` removes MORE pixels than GUI at threshold 52.0
+- ❌ Non-linear behavior suggests additional hidden settings or scale conversion issue
+
+### **Investigation Findings**
+
+1. **Threshold API**: Using `Gimp.context_set_sample_threshold_int(int(threshold))` which expects 0-100 scale
+2. **Context Settings Applied**:
+   - `Gimp.context_set_antialias(True)`
+   - `Gimp.context_set_feather(False)`
+   - `Gimp.context_set_sample_merged(False)`
+   - `Gimp.context_set_sample_criterion(Gimp.SelectCriterion.COMPOSITE)`
+   - `Gimp.context_set_sample_threshold_int(int(threshold))`
+   - `Gimp.context_set_sample_transparent(True)`
+   - `Gimp.context_set_diagonal_neighbors(False)`
+
+3. **Observations**:
+   - At threshold 15.0: Script matches GUI ✅
+   - At threshold 52.0: Script removes more than GUI ❌
+   - Suggests non-linear relationship or additional factor
+
+### **Hypotheses to Investigate**
+
+1. **Scale Mismatch**: `context_set_sample_threshold_int()` might use 0-255 scale (not 0-100)
+   - Test: Try `int(threshold * 255 / 100)` conversion
+
+2. **Grow/Feather Interference**: Despite setting to 0, might still be applied
+   - Verify: Check GIMP output logs for actual grow/feather operations
+
+3. **Multiple Corner Selection**: Selecting 4 corners with ADD operation might compound threshold
+   - Test: Try single corner selection to isolate behavior
+
+4. **GIMP State Accumulation**: Previous operations might affect threshold interpretation
+   - Test: Add `Gimp.context_push()` / `Gimp.context_pop()` to isolate state
+
+5. **API Documentation Gap**: GIMP 3.0 API docs may be incomplete/incorrect
+   - Action: Test empirically with known values to determine actual scale
+
+### **Recommended Next Steps**
+
+1. **Empirical Testing**: Create test script that tries different conversions:
+   ```python
+   # Test 1: Direct value (current)
+   Gimp.context_set_sample_threshold_int(15)
+   
+   # Test 2: 0-255 scale
+   Gimp.context_set_sample_threshold_int(int(15 * 255 / 100))
+   
+   # Test 3: Float version
+   Gimp.context_set_sample_threshold(15.0 / 100.0)
+   ```
+
+2. **Isolate Selection**: Test with single corner instead of 4 corners with ADD
+
+3. **Context Isolation**: Wrap selections in `context_push()` / `context_pop()`
+
+4. **GIMP Log Analysis**: Enable verbose GIMP logging to see actual threshold values used
+
+5. **Binary Search**: Use binary search to find exact threshold value that matches GUI behavior at different target levels
+
+### **Impact Assessment**
+
+- **Low thresholds (0-20)**: Works correctly ✅
+- **Medium thresholds (21-40)**: Unknown, needs testing ⚠️
+- **High thresholds (41-100)**: Removes too much ❌
+- **User workaround**: Use lower threshold values until fixed
+- **Priority**: Medium (affects quality but has workaround)
 
 ***
 

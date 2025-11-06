@@ -218,6 +218,10 @@ module RubySpriter
         options[:grow_selection] = g
       end
 
+      opts.on("-f", "--feather PIXELS", Float, "Feather selection edges in pixels (default: 0.0, softer edges)") do |f|
+        options[:feather_radius] = f
+      end
+
       opts.separator ""
     end
 

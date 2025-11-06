@@ -8,6 +8,9 @@ module RubySpriter
   class GimpProcessor
     attr_reader :options, :gimp_path, :gimp_version
 
+    # Default background color tolerance for selection operations (0-100 scale)
+    DEFAULT_BG_THRESHOLD = 15.0
+
     def initialize(gimp_path, options = {})
       @gimp_path = gimp_path
       @options = options
@@ -470,7 +473,7 @@ module RubySpriter
 
       use_fuzzy = options[:fuzzy_select]
       grow = options[:grow_selection] || 1
-      feather = options[:bg_threshold] || 0.0
+      feather = options[:feather_radius] || 0.0
 
       # Build selection method
       if use_fuzzy
@@ -557,17 +560,31 @@ module RubySpriter
     end
 
     def generate_fuzzy_select_code
+      # Use nil-coalescing to ensure default is applied when option is nil
+      threshold = options[:bg_threshold].nil? ? DEFAULT_BG_THRESHOLD : options[:bg_threshold]
+
       <<~PYTHON.chomp
         # Fuzzy select (contiguous regions only)
         print("Using FUZZY SELECT (contiguous regions only)")
+        print(f"Threshold: #{threshold}")
+
+        # Set ALL context settings to match GUI defaults EXACTLY
+        Gimp.context_set_antialias(True)
+        Gimp.context_set_feather(False)
+        Gimp.context_set_sample_merged(False)
+        Gimp.context_set_sample_criterion(Gimp.SelectCriterion.COMPOSITE)
+        Gimp.context_set_sample_threshold_int(int(#{threshold}))
+        Gimp.context_set_sample_transparent(True)
+        Gimp.context_set_diagonal_neighbors(False)
+
         select_proc = pdb.lookup_procedure('gimp-image-select-contiguous-color')
-        
+
         if not select_proc:
             raise Exception("Could not find gimp-image-select-contiguous-color procedure")
-        
+
         for i, (x, y) in enumerate(corners):
             print(f"  Corner {i+1} at ({x}, {y})")
-            
+
             config = select_proc.create_config()
             config.set_property('image', img)
             config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
@@ -579,18 +596,31 @@ module RubySpriter
     end
 
     def generate_global_select_code
+      # Use nil-coalescing to ensure default is applied when option is nil
+      threshold = options[:bg_threshold].nil? ? DEFAULT_BG_THRESHOLD : options[:bg_threshold]
+
       <<~PYTHON.chomp
         # Global color select (all matching pixels)
         print("Using GLOBAL COLOR SELECT (all matching pixels)")
+        print(f"Threshold: #{threshold}")
+
+        # Set ALL context settings to match GUI defaults EXACTLY
+        Gimp.context_set_antialias(True)
+        Gimp.context_set_feather(False)
+        Gimp.context_set_sample_merged(False)
+        Gimp.context_set_sample_criterion(Gimp.SelectCriterion.COMPOSITE)
+        Gimp.context_set_sample_threshold_int(int(#{threshold}))
+        Gimp.context_set_sample_transparent(True)
+
         select_proc = pdb.lookup_procedure('gimp-image-select-color')
-        
+
         if not select_proc:
             raise Exception("Could not find gimp-image-select-color procedure")
-        
+
         for i, (x, y) in enumerate(corners):
             print(f"  Corner {i+1} at ({x}, {y})")
             color = layer.get_pixel(x, y)
-            
+
             config = select_proc.create_config()
             config.set_property('image', img)
             config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
@@ -601,7 +631,7 @@ module RubySpriter
     end
 
     def generate_grow_selection_code
-      grow = options[:grow_selection] || 1
+      grow = options[:grow_selection].nil? ? 0 : options[:grow_selection]  # DEFAULT TO 0!
       return "# No selection growth" if grow <= 0
 
       <<~PYTHON.chomp
@@ -618,20 +648,27 @@ module RubySpriter
     end
 
     def generate_feather_selection_code
-      threshold = options[:bg_threshold] || 0.0
-      return "# No feathering" if threshold <= 0
+      feather_radius = options[:feather_radius] || 0.0
 
-      <<~PYTHON.chomp
-        # Feather selection
-        print(f"Feathering selection by #{threshold} pixels...")
-        feather_proc = pdb.lookup_procedure('gimp-selection-feather')
-        if feather_proc:
-            config = feather_proc.create_config()
-            config.set_property('image', img)
-            config.set_property('radius', #{threshold})
-            feather_proc.run(config)
-            print("Selection feathered")
-      PYTHON
+      if feather_radius > 0
+        # Set feathering via context
+        <<~PYTHON.chomp
+          # Feather selection
+          print(f"Feathering selection by #{feather_radius} pixels...")
+          Gimp.context_set_feather(True)
+          Gimp.context_set_feather_radius(#{feather_radius})
+
+          feather_proc = pdb.lookup_procedure('gimp-selection-feather')
+          if feather_proc:
+              config = feather_proc.create_config()
+              config.set_property('image', img)
+              config.set_property('radius', #{feather_radius})
+              feather_proc.run(config)
+              print("Selection feathered")
+        PYTHON
+      else
+        "# No feathering"
+      end
     end
 
     def execute_gimp_script(script_content, expected_output, operation_name)

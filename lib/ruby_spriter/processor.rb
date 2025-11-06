@@ -66,8 +66,9 @@ module RubySpriter
         sharpen_gain: 0.5,
         sharpen_threshold: 0.03,
         remove_bg: false,
-        bg_threshold: 0.0,
-        grow_selection: 1,
+        bg_threshold: 15.0,
+        feather_radius: 0.0,
+        grow_selection: 0,  # Changed from 1 to 0 - don't grow by default!
         fuzzy_select: true,
         operation_order: :scale_then_remove_bg,
         validate_columns: true,
