@@ -352,16 +352,19 @@ ruby_spriter --video input.mp4 --scale 50 --sharpen \
 ```
 
 ### Background Removal
-```bash
-# Remove background (auto-optimized order)
-ruby_spriter --video input.mp4 --scale 50 --remove-bg
 
-# Process existing spritesheet
-ruby_spriter --image sprite.png --remove-bg --fuzzy
+```bash
+# Remove background (default: global select with inner background removal)
+ruby_spriter --video input.mp4 --remove-bg
+
+# Remove only contiguous background (fuzzy select)
+ruby_spriter --video input.mp4 --remove-bg --fuzzy
 
 # Fine-tune background removal
-ruby_spriter --image sprite.png --remove-bg \
-  --threshold 1.5 --grow 2
+ruby_spriter --image sprite.png --remove-bg --threshold 52.0
+
+# Adjust background sampling
+ruby_spriter --image sprite.png --remove-bg --bg-sample-offset 7 --bg-sample-count 15
 ```
 
 ### Batch Processing (v0.6.7+)
