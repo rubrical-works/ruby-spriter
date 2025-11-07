@@ -154,7 +154,22 @@ module RubySpriter
 
       Utils::OutputFormatter.indent("Removing background (#{method} select)...")
 
-      script = generate_remove_bg_script(input_file, output_file)
+      # Collect background colors for --no-fuzzy mode (default)
+      background_colors = nil
+      if options[:remove_bg] && !options[:fuzzy_select]
+        Utils::OutputFormatter.indent("Sampling background colors for global selection...")
+
+        sample_offset = options[:bg_sample_offset] || 5
+        sample_count = options[:bg_sample_count] || 10
+        max_rows = 20
+
+        sampler = BackgroundSampler.new(input_file, sample_offset, sample_count, max_rows)
+        background_colors = sampler.collect_unique_colors
+
+        Utils::OutputFormatter.indent("  Collected #{background_colors.length} unique background colors")
+      end
+
+      script = generate_remove_bg_script(input_file, output_file, background_colors)
       execute_gimp_script(script, output_file, "Background Removal")
 
       # Preserve metadata from input file
@@ -347,15 +362,15 @@ module RubySpriter
       PYTHON
     end
 
-    def generate_remove_bg_script(input_file, output_file)
+    def generate_remove_bg_script(input_file, output_file, background_colors = nil)
       if gimp2?
-        generate_remove_bg_script_gimp2(input_file, output_file)
+        generate_remove_bg_script_gimp2(input_file, output_file, background_colors)
       else
-        generate_remove_bg_script_gimp3(input_file, output_file)
+        generate_remove_bg_script_gimp3(input_file, output_file, background_colors)
       end
     end
 
-    def generate_remove_bg_script_gimp3(input_file, output_file)
+    def generate_remove_bg_script_gimp3(input_file, output_file, background_colors = nil)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
 
@@ -366,6 +381,11 @@ module RubySpriter
         generate_fuzzy_select_code
       else
         generate_global_select_code
+      end
+
+      # If background colors provided, use global select for inner backgrounds
+      if background_colors && !background_colors.empty?
+        selection_code << "\n" << generate_global_select_with_colors(background_colors)
       end
 
       # Build optional processing code
@@ -461,7 +481,7 @@ module RubySpriter
       PYTHON
     end
 
-    def generate_remove_bg_script_gimp2(input_file, output_file)
+    def generate_remove_bg_script_gimp2(input_file, output_file, background_colors = nil)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
 
@@ -617,6 +637,35 @@ module RubySpriter
         config.set_property('drawable', layer)
         config.set_property('color', color)
         select_proc.run(config)
+      PYTHON
+    end
+
+    def generate_global_select_with_colors(background_colors)
+      # Convert Ruby array of hashes to Python list of dicts
+      colors_python = background_colors.map { |c| "{'r': #{c[:r]}, 'g': #{c[:g]}, 'b': #{c[:b]}}" }.join(', ')
+
+      <<~PYTHON.chomp
+        # Global color select for inner backgrounds
+        print("Selecting inner background colors...")
+        select_proc = pdb.lookup_procedure('gimp-image-select-color')
+
+        if not select_proc:
+            raise Exception("Could not find gimp-image-select-color procedure")
+
+        for i, bg_color in enumerate([#{colors_python}]):
+            print(f"  Selecting color {i+1}: RGB({bg_color['r']}, {bg_color['g']}, {bg_color['b']})")
+
+            # Create Gegl.Color
+            color = Gegl.Color.new(f"rgb({bg_color['r']/255.0}, {bg_color['g']/255.0}, {bg_color['b']/255.0})")
+
+            config = select_proc.create_config()
+            config.set_property('image', img)
+            config.set_property('operation', Gimp.ChannelOps.ADD)
+            config.set_property('drawable', layer)
+            config.set_property('color', color)
+            select_proc.run(config)
+
+        print("Inner background colors selected")
       PYTHON
     end
 
