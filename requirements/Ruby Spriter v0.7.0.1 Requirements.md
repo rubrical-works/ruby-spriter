@@ -1,6 +1,6 @@
 # Ruby Spriter v0.7.0.1 Requirements 
 
-Requirements Revision #: 6
+Requirements Revision #: 7
 Release Type: PATCH RELEASE (builds upon v0.7.0)
 Status: IN PROGRESS - Performance Optimization Complete
 Date: 2025-11-05  
@@ -887,6 +887,35 @@ ruby_spriter --image sprite.png --remove-bg
    - Fix: Single-point interior selection with REPLACE mode
    - Status: Working correctly
 
+## Implementation Complete (Nov 6, 2025)
+
+### BackgroundSampler Feature
+
+**Implemented:**
+- ? BackgroundSampler class for intelligent background color sampling
+- ? Samples interior regions (5-10px from edge) avoiding compression artifacts
+- ? Collects up to 10 unique background colors across multiple rows
+- ? Pixel cache optimization (65x performance improvement)
+- ? Two-pass GIMP integration (outer + inner background removal)
+- ? --no-fuzzy is now DEFAULT for --remove-bg
+- ? --fuzzy flag for contiguous-only selection (backward compatibility)
+- ? CLI options: --bg-sample-offset, --bg-sample-count
+
+**Removed (Deprecated):**
+- ? EdgeSampler class (replaced by BackgroundSampler)
+- ? InnerBackgroundProcessor class (replaced by GIMP integration)
+- ? --try-inner flag (functionality now in --no-fuzzy default)
+- ? --threshold-stepping flag (superseded by BackgroundSampler)
+- ? --inner-min-area, --adaptive-min-area, --multi-pass flags
+- ? --edge-sample-depth, --edge-sample-pattern flags
+- ? --color-space, --remove-smoke, --bg-fuzz, --ghost-threshold flags
+
+**Test Coverage:**
+- 507 examples, 0 failures, 3 pending
+- BackgroundSampler: 12 unit tests
+- No-fuzzy mode: 4 integration tests
+- Single-point selection: 3 unit tests
+
 ## Known Issues
 
 ### Minor Usability Issues (Not Blocking Release)
@@ -1159,12 +1188,12 @@ Git status: gh and git installed
 
 1. ✅ ~~Complete regression testing~~ (Done)
 2. ✅ ~~Performance optimization~~ (Complete - 90% faster)
-3. Implement dense shallow edge sampling
-4. Implement timeout protection
-5. Fix video mode integration (--try-inner not working with --video)
-6. Update documentation
-7. Update version to 0.7.0.1
-8. Create pull request
+3. ? ~~Implement dense shallow edge sampling~~ (BackgroundSampler)
+4. ? ~~Fix GIMP threshold behavior~~ (Single-point selection)
+5. ? Implement timeout protection (Deferred to v0.7.0.2)
+6. ?? Update documentation (In progress)
+7. ?? Update version to 0.7.0.1 (Pending)
+8. ?? Create pull request (Pending)
 
 ## [END-DATA: Interactive Development Process Framework]
 
