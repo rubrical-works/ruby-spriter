@@ -1,9 +1,9 @@
 # Ruby Spriter v0.7.0.1 Requirements 
 
-Requirements Revision #: 9
+Requirements Revision #: 10
 Release Type: PATCH RELEASE (builds upon v0.7.0)
 Status: IN PROGRESS - Performance Optimization & Frame-by-Frame Complete
-Date: 2025-11-07  
+Date: 2025-11-08
 Prerequisite: Upload this requirements document directly or through the TypingMind KB as a direct file upload.
 
 ***
@@ -128,11 +128,11 @@ Added `--by-frame` flag that changes the processing workflow to:
 - `lib/ruby_spriter/cli.rb` - Added flag and validation
 - `lib/ruby_spriter/video_processor.rb` - Added frame-by-frame processing
 - `lib/ruby_spriter/processor.rb` - Added routing logic
-- `lib/ruby_spriter/batch_processor.rb` - Added batch support
+- `lib/ruby_spriter/batch_processor.rb` - Added batch support, refactored (Nov 8)
 - `spec/ruby_spriter/cli_spec.rb` - Added validation tests
 - `spec/ruby_spriter/video_processor_spec.rb` - Added processing tests
 - `spec/ruby_spriter/processor_spec.rb` - Added integration tests
-- `spec/ruby_spriter/batch_processor_spec.rb` - Added batch tests
+- `spec/ruby_spriter/batch_processor_spec.rb` - Added batch tests, refactoring tests (Nov 8)
 
 ### Usage Examples:
 
@@ -1009,6 +1009,57 @@ ruby_spriter --image sprite.png --remove-bg
 - No-fuzzy mode: 4 integration tests
 - Single-point selection: 3 unit tests
 
+
+## Refactoring Complete (Nov 8, 2025)
+
+### BatchProcessor Code Quality Improvements
+
+**Objective:** Eliminate code duplication and improve architectural consistency between BatchProcessor and Processor classes.
+
+**Issues Identified:**
+1. Duplicate DependencyChecker instantiation (2× per video in batch mode)
+2. Duplicate conditional logic for frame-by-frame mode detection
+3. Duplicate result normalization logic
+4. Redundant VideoProcessor instantiation
+5. Inconsistent dependency checking pattern vs Processor class
+
+**Implementation:**
+
+✅ **Eager Dependency Checking**
+- Dependencies checked once during initialization (when GIMP needed)
+- Cached `@gimp_path` and `@gimp_version` as instance variables
+- Eliminated redundant shell command execution during processing
+
+✅ **Helper Methods Extracted**
+- `using_frame_by_frame_background_removal?` - Checks both flags
+- `normalize_video_result_format` - Standardizes result hash
+- `needs_dependency_setup?` - Determines if GIMP required
+- `setup_dependencies` - Caches dependency check results
+
+✅ **Refactored Methods**
+- `process_video` - Uses cached dependencies, helper methods
+- `process_with_gimp` - Uses cached dependencies directly
+- Eliminated redundant VideoProcessor instantiation
+
+**Performance Impact:**
+- Before: 2 dependency checks per video (20 checks for 10 videos)
+- After: 1 dependency check total (20× reduction)
+- Eliminated redundant shell command execution
+
+**Test Coverage:**
+- Added 14 new tests (15 → 29 examples)
+- Coverage: ~80% → ~95% for BatchProcessor
+- All 474 tests passing, 0 regressions
+
+**Files Modified:**
+- `lib/ruby_spriter/batch_processor.rb` - Refactored implementation
+- `spec/ruby_spriter/batch_processor_spec.rb` - Added comprehensive tests
+
+**Architectural Consistency:**
+- BatchProcessor now follows Processor pattern
+- Consistent dependency management across codebase
+- Better separation of concerns (setup vs processing)
+
 ## Known Issues
 
 ### Minor Usability Issues (Not Blocking Release)
@@ -1204,8 +1255,9 @@ The `--remove-bg` feature with `--threshold` parameter does not fully match GIMP
 
 ### Implementation
 
-- [x] All v0.7.0 tests pass (existing test suite) - 471/474
+- [x] All v0.7.0 tests pass (existing test suite) - 474/474
 - [x] Backward compatibility verified (`--remove-bg` alone = v0.6.7.1 output)
+- [x] BatchProcessor refactoring complete (eliminated duplication)
 - [ ] Dense shallow edge sampling implemented (every 5px at depth=2)
 - [ ] Edge sampling avoids pixel 0 (uses pixel 1 and height-2/width-2)
 - [x] Comprehensive color palette captured from varied backgrounds
@@ -1283,12 +1335,13 @@ Necessary prerequisites installed: Yes
 
 1. ✅ ~~Complete regression testing~~ (Done)
 2. ✅ ~~Performance optimization~~ (Complete - 90% faster)
-3. ? ~~Implement dense shallow edge sampling~~ (BackgroundSampler)
-4. ? ~~Fix GIMP threshold behavior~~ (Single-point selection)
-5. ? Implement timeout protection (Deferred to v0.7.0.2)
-6. ?? Update documentation (In progress)
-7. ?? Update version to 0.7.0.1 (Pending)
-8. ?? Create pull request (Pending)
+3. ✅ ~~Implement dense shallow edge sampling~~ (BackgroundSampler)
+4. ✅ ~~Fix GIMP threshold behavior~~ (Single-point selection)
+5. ✅ ~~BatchProcessor refactoring~~ (Complete - eliminated duplication)
+6. ⚠️ Implement timeout protection (Deferred to v0.7.0.2)
+7. ⚠️ Update documentation (In progress)
+8. ⚠️ Update version to 0.7.0.1 (Pending)
+9. ⚠️ Create pull request (Pending)
 
 ## [END-DATA: Interactive Development Process Framework]
 

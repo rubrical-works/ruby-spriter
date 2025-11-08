@@ -9,7 +9,10 @@ module RubySpriter
 
     def initialize(options = {})
       @options = options
+      @gimp_path = nil
+      @gimp_version = nil
       validate_directory!
+      setup_dependencies if needs_dependency_setup?
     end
 
     # Find all MP4 files in the directory
@@ -112,6 +115,39 @@ module RubySpriter
       raise ValidationError, "Directory not found: #{dir}" unless File.directory?(dir)
     end
 
+    # Check if using frame-by-frame background removal mode
+    # @return [Boolean] true if both --by-frame and --remove-bg flags are set
+    def using_frame_by_frame_background_removal?
+      options[:by_frame] && options[:remove_bg]
+    end
+
+    # Normalize video processing result to standard format
+    # @param result [Hash] Result from process_with_background_removal
+    # @return [Hash] Normalized result with :output_file, :columns, :rows, :frames
+    def normalize_video_result_format(result)
+      {
+        output_file: result[:output_file],
+        columns: result[:columns],
+        rows: (result[:frames].to_f / result[:columns]).ceil,
+        frames: result[:frames]
+      }
+    end
+
+    # Check if we need to setup dependencies (GIMP required)
+    # @return [Boolean] true if any operation requires GIMP
+    def needs_dependency_setup?
+      options[:by_frame] || options[:scale_percent] || options[:remove_bg] || options[:sharpen]
+    end
+
+    # Setup dependencies by checking for required tools
+    # Caches GIMP path and version as instance variables
+    def setup_dependencies
+      checker = DependencyChecker.new(verbose: false)
+      results = checker.check_all
+      @gimp_path = checker.gimp_path
+      @gimp_version = checker.gimp_version
+    end
+
     def determine_output_directory
       options[:outputdir] || options[:dir]
     end
@@ -132,22 +168,15 @@ module RubySpriter
     end
 
     def process_video(video_file, output_file)
-      video_processor = VideoProcessor.new(options)
-
       # Check if we need frame-by-frame background removal
-      if options[:by_frame] && options[:remove_bg]
+      if using_frame_by_frame_background_removal?
         # Frame-by-frame processing with background removal
-        # Get GIMP path for VideoProcessor
-        checker = DependencyChecker.new(verbose: false)
-        results = checker.check_all
-        gimp_path = checker.gimp_path
-
-        unless gimp_path
+        unless @gimp_path
           raise DependencyError, "GIMP not found but required for --by-frame processing"
         end
 
         # Pass gimp_path through options
-        video_options = options.merge(gimp_path: gimp_path)
+        video_options = options.merge(gimp_path: @gimp_path)
         video_processor = VideoProcessor.new(video_options)
 
         result = video_processor.process_with_background_removal(
@@ -157,16 +186,12 @@ module RubySpriter
         )
 
         # Normalize result format to match create_spritesheet
-        result = {
-          output_file: result[:output_file],
-          columns: result[:columns],
-          rows: (result[:frames].to_f / result[:columns]).ceil,
-          frames: result[:frames]
-        }
+        result = normalize_video_result_format(result)
 
         working_file = result[:output_file]
       else
         # Standard video processing
+        video_processor = VideoProcessor.new(options)
         result = video_processor.create_spritesheet(video_file, output_file)
         working_file = result[:output_file]
 
@@ -186,18 +211,13 @@ module RubySpriter
     end
 
     def process_with_gimp(input_file, video_result)
-      # Get GIMP path and version from dependency checker
-      checker = DependencyChecker.new(verbose: false)
-      results = checker.check_all
-      gimp_path = checker.gimp_path
-      gimp_version = checker.gimp_version
-
-      unless gimp_path
+      # Use cached GIMP path and version from initialization
+      unless @gimp_path
         raise DependencyError, "GIMP not found but required for processing"
       end
 
-      gimp_options = options.merge(gimp_version: gimp_version)
-      gimp_processor = GimpProcessor.new(gimp_path, gimp_options)
+      gimp_options = options.merge(gimp_version: @gimp_version)
+      gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
       output_file = gimp_processor.process(input_file)
 
       # Clean up intermediate file if different
