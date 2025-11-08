@@ -980,7 +980,7 @@ Multiple Output PNGs (or one consolidated PNG)
 - **VideoProcessor** - FFmpeg integration and frame-by-frame processing
 - **GimpProcessor** - GIMP batch scripting
 - **Consolidator** - Multi-sheet merging (file list or directory)
-- **BatchProcessor** (v0.6.7+) - Directory batch processing
+- **BatchProcessor** (v0.6.7+) - Directory batch processing with cached dependency checking for optimal performance
 - **CompressionManager** (v0.6.7+) - PNG compression with metadata preservation
 - **MetadataManager** - PNG metadata handling
 - **DependencyChecker** - Tool detection
@@ -1045,6 +1045,18 @@ ruby -Ilib bin/ruby_spriter --video test.mp4
 # Or use bundle exec
 bundle exec ruby_spriter --video test.mp4
 ```
+
+
+### Code Quality
+
+Ruby Spriter follows strict development practices:
+
+- **Test-Driven Development (TDD)**: All features developed using RED-GREEN-REFACTOR cycle
+- **High Test Coverage**: 474+ examples with comprehensive unit and integration tests
+- **Performance Optimization**: Continuous refactoring to eliminate redundancy and improve efficiency
+  - Example: BatchProcessor refactoring (v0.7.0.1) achieved 20× reduction in dependency checks
+- **Architectural Consistency**: Shared patterns across Processor and BatchProcessor classes
+- **Code Reviews**: Regular analysis to identify and eliminate duplication
 
 ---
 
