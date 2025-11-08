@@ -46,6 +46,17 @@ module RubySpriter
         raise ValidationError, "--add-meta cannot be combined with processing options (--scale, --remove-bg, --sharpen)"
       end
 
+      # Validate --by-frame flag requirements
+      if options[:by_frame]
+        unless options[:remove_bg]
+          raise ValidationError, "--by-frame requires --remove-bg"
+        end
+
+        unless options[:video] || options[:batch]
+          raise ValidationError, "--by-frame requires --video or --batch"
+        end
+      end
+
       # Run processor
       processor = Processor.new(options)
       processor.run
@@ -235,6 +246,10 @@ module RubySpriter
 
       opts.on("--no-fuzzy", "Use global color select (all matching pixels) - DEFAULT") do
         options[:fuzzy_select] = false
+      end
+
+      opts.on('--by-frame', 'Remove background from each frame individually (video/batch mode only)') do
+        options[:by_frame] = true
       end
 
       opts.separator ""

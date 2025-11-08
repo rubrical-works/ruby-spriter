@@ -1,9 +1,9 @@
 # Ruby Spriter v0.7.0.1 Requirements 
 
-Requirements Revision #: 7
+Requirements Revision #: 9
 Release Type: PATCH RELEASE (builds upon v0.7.0)
-Status: IN PROGRESS - Performance Optimization Complete
-Date: 2025-11-05  
+Status: IN PROGRESS - Performance Optimization & Frame-by-Frame Complete
+Date: 2025-11-07  
 Prerequisite: Upload this requirements document directly or through the TypingMind KB as a direct file upload.
 
 ***
@@ -66,6 +66,99 @@ Prerequisite: Upload this requirements document directly or through the TypingMi
 **Commit:** bedaf0f34d987c631363e55b9c3a637f831aba82
 
 **Branch:** rs_0701
+
+***
+
+## Feature: Frame-by-Frame Background Removal (COMPLETED)
+
+**Status:** ✅ COMPLETE (2025-11-07)
+
+**Objective:** Support videos with widely varying backgrounds by processing each frame individually before assembling the spritesheet.
+
+**Problem Statement:**
+When creating spritesheets from videos where the background changes significantly between frames (e.g., character moving through different environments, lighting changes, camera pans), the standard workflow of "assemble spritesheet → remove background" fails because:
+- Background colors vary across frames
+- Single background sampling cannot capture all variations
+- Results in incomplete background removal or sprite damage
+
+**Solution Implemented:**
+Added `--by-frame` flag that changes the processing workflow to:
+1. Extract frames from video
+2. Remove background from EACH frame individually
+3. Assemble spritesheet from processed frames
+
+**Implementation Summary:**
+
+### CLI Validation (✅ Complete)
+- Added `--by-frame` flag with proper validation
+- Requires `--video` or `--batch` mode
+- Requires `--remove-bg` flag
+- Error messages follow existing ValidationError pattern
+
+### VideoProcessor Enhancement (✅ Complete)
+- Added `process_with_background_removal(video_path, output_path, options)` method
+- Added `process_frames_individually(frame_files, temp_dir, options)` helper
+- Progress indicator: "Processing frame X/Y..."
+- Supports all background removal modes (--fuzzy, --threshold, --threshold-stepping)
+- Returns result hash consistent with `create_spritesheet`
+- Adds `processing_mode: 'by-frame'` to PNG metadata
+
+### Processor Integration (✅ Complete)
+- Modified `execute_video_workflow` to route to frame-by-frame processing
+- Added `using_frame_by_frame_background_removal?` helper method
+- Added `normalize_video_result_format` helper method
+- Skips redundant GIMP processing when by-frame already processed
+- Passes `gimp_path` through options to VideoProcessor
+
+### BatchProcessor Integration (✅ Complete)
+- Modified `process_video` to support frame-by-frame processing
+- Checks for `--by-frame` flag and routes appropriately
+- Gets GIMP path from DependencyChecker
+- Maintains backward compatibility with standard workflow
+
+### Testing (✅ Complete)
+- CLI validation: 5 tests (all passing)
+- VideoProcessor: 3 tests (all passing)
+- Processor integration: 2 tests (all passing)
+- BatchProcessor integration: 2 tests (all passing)
+- **Total: 12 new tests, 0 failures**
+- **Overall: 455 tests passing, 0 failures**
+
+### Files Modified:
+- `lib/ruby_spriter/cli.rb` - Added flag and validation
+- `lib/ruby_spriter/video_processor.rb` - Added frame-by-frame processing
+- `lib/ruby_spriter/processor.rb` - Added routing logic
+- `lib/ruby_spriter/batch_processor.rb` - Added batch support
+- `spec/ruby_spriter/cli_spec.rb` - Added validation tests
+- `spec/ruby_spriter/video_processor_spec.rb` - Added processing tests
+- `spec/ruby_spriter/processor_spec.rb` - Added integration tests
+- `spec/ruby_spriter/batch_processor_spec.rb` - Added batch tests
+
+### Usage Examples:
+
+```bash
+# Basic frame-by-frame processing
+ruby_spriter --video input.mp4 --remove-bg --by-frame
+
+# With custom grid
+ruby_spriter --video input.mp4 --remove-bg --by-frame --frames 32 --columns 8
+
+# With scaling and sharpening
+ruby_spriter --video input.mp4 --remove-bg --by-frame --scale 50 --sharpen
+
+# With threshold stepping (multiple thresholds per frame)
+ruby_spriter --video input.mp4 --remove-bg --by-frame --threshold-stepping
+
+# Batch processing with frame-by-frame
+ruby_spriter --batch --dir videos/ --remove-bg --by-frame
+
+# With all processing options
+ruby_spriter --video input.mp4 --remove-bg --by-frame \
+  --frames 64 --columns 8 \
+  --scale 50 --interpolation nohalo \
+  --sharpen --sharpen-gain 0.8 \
+  --max-compress
+```
 
 ***
 
@@ -1160,20 +1253,22 @@ The `--remove-bg` feature with `--threshold` parameter does not fully match GIMP
 
 ## [START-DATA: Interactive Development Process Framework]
 
-Github repo:  https://github.com/scooter-indie/ruby-spriter  
-Target branch: rs_0701 (branch exists, in progress)  
-Verify Repo Structure: Yes  
-Git Diff in KB: Yes
+GitHub repo:  https://github.com/scooter-indie/ruby-spriter  
+GitHub MCP Enabled as Plugin: Yes
+GitHub Username: scooter-indie
+GitHub Repo: scooter-indie/ruby-spriter
+Target branch [version] [status]: rs_0701 [v0.7.0.1-dev] [in progress]  
+Git status: gh and git installed  
+Git Diff in KB: No
+filesystem MCP Enabled as Plugin: Yes
+Local access to target repository: Yes  
+local repo location: E:\Projects\ruby-spriter
 Web Scraping URLs in KB: Yes
 Baseline version to build upon: v0.7.0 
 Requirements in /requirements: Ruby Spriter v0.7.0.1 Requirements.md
-Requirement in KB: Yes
-Test Framework Location: /spec  
-Local access to target repository: Yes  
+Requirement in KB: No
+Test Framework Location: /spec 
 Necessary prerequisites installed: Yes  
-Current branch [version] [status]: rs_0701 [v0.7.0.1-dev] [in progress]  
-Git status: gh and git installed  
-
 **Implementation Status:**
 
 - Core GIMP integration: ✅ Complete

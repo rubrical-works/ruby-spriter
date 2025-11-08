@@ -733,4 +733,80 @@ RSpec.describe RubySpriter::Processor do
     end
   end
 
+  describe 'video workflow with --by-frame flag' do
+    let(:options) do
+      {
+        video: 'test_video.mp4',
+        remove_bg: true,
+        by_frame: true,
+        frame_count: 4,
+        columns: 2,
+        overwrite: true
+      }
+    end
+
+    let(:processor) { described_class.new(options) }
+
+    before do
+      # Mock dependency checker
+      dependency_checker = instance_double(RubySpriter::DependencyChecker)
+      allow(RubySpriter::DependencyChecker).to receive(:new).and_return(dependency_checker)
+      allow(dependency_checker).to receive(:check_all).and_return({
+        ffmpeg: { available: true },
+        ffprobe: { available: true },
+        imagemagick: { available: true },
+        gimp: { available: true }
+      })
+      allow(dependency_checker).to receive(:gimp_path).and_return('/usr/bin/gimp')
+      allow(dependency_checker).to receive(:gimp_version).and_return({ major: 3, minor: 0 })
+      allow(dependency_checker).to receive(:print_report)
+
+      # Mock temp directory
+      allow(Dir).to receive(:mktmpdir).and_return('/tmp/test')
+      allow(FileUtils).to receive(:rm_rf)
+      allow(FileUtils).to receive(:cp)
+
+      # Mock file validation and operations
+      allow(File).to receive(:exist?).and_return(true)
+      allow(File).to receive(:delete)
+    end
+
+    it 'calls VideoProcessor.process_with_background_removal when by_frame is true' do
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+
+      # Expect process_with_background_removal to be called (not create_spritesheet)
+      expect(video_processor).to receive(:process_with_background_removal).and_return({
+        output_file: 'output.png',
+        columns: 2,
+        frames: 4,
+        processing_mode: 'by-frame'
+      })
+
+      # Should NOT call create_spritesheet
+      expect(video_processor).not_to receive(:create_spritesheet)
+
+      processor.run
+    end
+
+    it 'passes gimp_path through options to VideoProcessor' do
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+
+      # Capture the options passed to VideoProcessor.new
+      expect(RubySpriter::VideoProcessor).to receive(:new) do |passed_options|
+        expect(passed_options[:gimp_path]).to eq('/usr/bin/gimp')
+        video_processor
+      end
+
+      allow(video_processor).to receive(:process_with_background_removal).and_return({
+        output_file: 'output.png',
+        columns: 2,
+        frames: 4,
+        processing_mode: 'by-frame'
+      })
+
+      processor.run
+    end
+  end
+
 end

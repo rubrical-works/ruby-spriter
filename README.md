@@ -16,6 +16,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 🎬 **Video to Spritesheet** - Extract frames from MP4 videos using FFmpeg
 - 🖼️ **Advanced Image Processing** - Scale, sharpen, and remove backgrounds with precision
 - 🎨 **Quality Enhancement** - 5 interpolation methods and configurable unsharp masking
+- 🎞️ **Frame-by-Frame Processing** - Process each video frame individually for varying backgrounds (v0.7.0.1+)
 - 🔮 **Inner Background Removal** - Remove interior background regions with advanced edge sampling (v0.7.0+)
 - 🧹 **Multi-Threshold Processing** - Process with multiple fuzzy select thresholds for superior edges (v0.7.0+)
 - 👻 **Ghost Edge Prevention** - Multi-pass cleanup of semi-transparent artifacts (v0.7.0+)
@@ -28,7 +29,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 - 📦 **Batch Processing** - Process multiple MP4 files in a directory automatically (v0.6.7+)
 - 🗜️ **Maximum Compression** - Optimal PNG compression while preserving metadata (v0.6.7+)
 - 🌍 **Cross-Platform** - Works seamlessly on Windows, Linux, and macOS
-- 🧪 **Production Ready** - Comprehensive RSpec test coverage (102+ unit tests, 3+ feature tests)
+- 🧪 **Production Ready** - Comprehensive RSpec test coverage (455+ tests)
 
 ### Image Processing Features
 
@@ -52,6 +53,7 @@ A powerful cross-platform Ruby tool for creating high-quality spritesheets from 
 #### **Background Removal**
 - **Fuzzy Select** - Contiguous color regions (default)
 - **Global Color Select** - All matching pixels across image
+- **Frame-by-Frame** - Process each video frame individually (v0.7.0.1+)
 - Adjustable selection growth and feathering
 - **Smart Operation Order** - Automatically optimizes quality
 
@@ -289,7 +291,7 @@ bundle install
 
 # Build and install gem locally
 gem build ruby_spriter.gemspec
-gem install ruby_spriter-0.6.7.gem
+gem install ruby_spriter-0.7.0.1.gem
 ```
 
 **Best for**: Contributors, developers wanting latest code
@@ -360,6 +362,9 @@ ruby_spriter --video input.mp4 --remove-bg
 # Remove only contiguous background (fuzzy select)
 ruby_spriter --video input.mp4 --remove-bg --fuzzy
 
+# Frame-by-frame for varying backgrounds (v0.7.0.1+)
+ruby_spriter --video input.mp4 --remove-bg --by-frame
+
 # Fine-tune background removal
 ruby_spriter --image sprite.png --remove-bg --threshold 52.0
 
@@ -374,6 +379,9 @@ ruby_spriter --batch --dir "videos/"
 
 # Batch process with scaling and compression
 ruby_spriter --batch --dir "videos/" --scale 50 --max-compress
+
+# Batch with frame-by-frame processing (v0.7.0.1+)
+ruby_spriter --batch --dir "videos/" --remove-bg --by-frame
 
 # Batch process with output to different directory
 ruby_spriter --batch --dir "videos/" --outputdir "output/"
@@ -490,6 +498,7 @@ ruby_spriter --image large_sprite.png \
     --fuzzy                   Use fuzzy select (contiguous) - DEFAULT
     --no-fuzzy                Use global color select (all matching)
     --order ORDER             Operation order: scale_first, bg_first
+    --by-frame                Frame-by-frame background removal (video/batch only)
 ```
 
 #### **Preset Configurations**
@@ -598,6 +607,34 @@ ruby_spriter --image 4k_sprite.png \
   --max-compress \
   --output hd_sprite.png
 ```
+
+### Frame-by-Frame Processing for Varying Backgrounds (v0.7.0.1+)
+
+```bash
+# Videos with changing backgrounds (lighting, environment, camera movement)
+ruby_spriter --video character_walk.mp4 \
+  --remove-bg --by-frame \
+  --frames 16 --columns 4
+
+# Batch process multiple videos with varying backgrounds
+ruby_spriter --batch --dir "animations/" \
+  --remove-bg --by-frame \
+  --scale 50 --sharpen
+
+# Combine with threshold stepping for maximum quality
+ruby_spriter --video explosion.mp4 \
+  --remove-bg --by-frame --threshold-stepping \
+  --frames 32 --columns 8
+```
+
+**When to use `--by-frame`:**
+- ✅ Video has changing backgrounds between frames
+- ✅ Character moves through different environments
+- ✅ Lighting conditions vary throughout video
+- ✅ Camera pans or moves during recording
+- ✅ Quality is more important than processing speed
+
+**Performance note:** Frame-by-frame processing is ~16× slower than standard mode but produces superior results for videos with varying backgrounds.
 
 ---
 
@@ -803,6 +840,47 @@ ruby_spriter --batch --dir "sprites/" --remove-bg --max-compress
 - GIMP 3.x via Flatpak (`flatpak install flathub org.gimp.GIMP`)
 - Xvfb (`sudo apt install xvfb` on Ubuntu/Debian)
 
+### Frame-by-Frame Background Removal (v0.7.0.1+)
+
+Process each video frame individually before assembling the spritesheet - perfect for videos with varying backgrounds.
+
+```bash
+# Basic frame-by-frame processing
+ruby_spriter --video input.mp4 --remove-bg --by-frame
+
+# With custom settings
+ruby_spriter --video input.mp4 --remove-bg --by-frame \
+  --frames 32 --columns 8 \
+  --scale 50 --sharpen
+
+# Batch processing with frame-by-frame
+ruby_spriter --batch --dir "videos/" --remove-bg --by-frame
+```
+
+**How it Works:**
+1. Extract frames from video → `frame_001.png`, `frame_002.png`, etc.
+2. Remove background from EACH frame individually (progress indicator shows "Processing frame X/Y...")
+3. Assemble spritesheet from processed frames
+4. Add metadata with `processing_mode: by-frame`
+
+**Standard Workflow vs Frame-by-Frame:**
+
+| Workflow | Process Order | Best For |
+|----------|---------------|----------|
+| **Standard** | Extract → Assemble → Remove BG | Consistent backgrounds |
+| **Frame-by-Frame** | Extract → Remove BG (each) → Assemble | Varying backgrounds |
+
+**Performance:**
+- Standard mode: ~7.5 seconds for 16 frames
+- Frame-by-frame mode: ~120 seconds for 16 frames (16× slower)
+- Trade-off: Longer processing time for superior quality
+
+**Compatibility:**
+- ✅ Works with `--video` and `--batch` modes
+- ✅ Supports all background removal modes (`--fuzzy`, `--threshold`, `--threshold-stepping`)
+- ✅ Compatible with `--scale`, `--sharpen`, `--max-compress`
+- ❌ Not available for `--image` mode (only for video processing)
+
 ---
 
 ## 🏗️ Architecture
@@ -828,6 +906,21 @@ Input Video (MP4)
 [GIMP] Scale and/or Background Removal (optional)
     ↓
 [ImageMagick] Sharpening (optional)
+    ↓
+Output PNG with Metadata
+```
+
+**Video Mode with Frame-by-Frame (v0.7.0.1+):**
+```
+Input Video (MP4)
+    ↓
+[FFmpeg] Frame Extraction
+    ↓
+[GIMP] Remove Background from EACH Frame
+    ↓
+[FFmpeg] Assemble Spritesheet from Processed Frames
+    ↓
+[ImageMagick] Metadata Embedding (with processing_mode: by-frame)
     ↓
 Output PNG with Metadata
 ```
@@ -884,7 +977,7 @@ Multiple Output PNGs (or one consolidated PNG)
 ### Key Components
 
 - **Processor** - Main orchestration
-- **VideoProcessor** - FFmpeg integration
+- **VideoProcessor** - FFmpeg integration and frame-by-frame processing
 - **GimpProcessor** - GIMP batch scripting
 - **Consolidator** - Multi-sheet merging (file list or directory)
 - **BatchProcessor** (v0.6.7+) - Directory batch processing
@@ -935,7 +1028,7 @@ ruby-spriter/
 │       ├── dependency_checker.rb
 │       ├── platform.rb
 │       └── utils/            # Helper modules
-├── spec/                     # RSpec tests (313 examples)
+├── spec/                     # RSpec tests (455+ examples)
 ├── .claude/
 │   └── agents/               # Custom Claude Code agent config
 ├── CLAUDE.md                 # Developer documentation

@@ -1888,5 +1888,58 @@ RSpec.describe RubySpriter::CLI do
         described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--frames', '14'])
       end
     end
+
+    describe '--by-frame flag validation' do
+      context 'when --by-frame is used without --video or --batch' do
+        it 'raises ValidationError when used with --image' do
+          expect {
+            described_class.start(['--image', 'sprite.png', '--remove-bg', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --video or --batch/)
+        end
+
+        it 'raises ValidationError when used alone with --remove-bg' do
+          expect {
+            described_class.start(['--remove-bg', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --video or --batch/)
+        end
+      end
+
+      context 'when --by-frame is used without --remove-bg' do
+        it 'raises ValidationError' do
+          expect {
+            described_class.start(['--video', 'input.mp4', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --remove-bg/)
+        end
+      end
+
+      context 'when --by-frame is used correctly' do
+        it 'accepts --by-frame with --video and --remove-bg' do
+          # Mock the entire Processor to prevent file validation
+          mock_processor = instance_double(RubySpriter::Processor)
+          allow(RubySpriter::Processor).to receive(:new).and_return(mock_processor)
+          allow(mock_processor).to receive(:run)
+
+          expect {
+            described_class.start(['--video', 'input.mp4', '--remove-bg', '--by-frame'])
+          }.not_to raise_error
+        end
+
+        it 'accepts --by-frame with --batch and --remove-bg' do
+          # Mock the entire BatchProcessor to prevent directory validation
+          mock_batch_processor = instance_double(RubySpriter::BatchProcessor)
+          allow(RubySpriter::BatchProcessor).to receive(:new).and_return(mock_batch_processor)
+          # Return a proper result hash that execute_batch_workflow expects
+          allow(mock_batch_processor).to receive(:process).and_return({
+            processed: 0,
+            failed: 0,
+            consolidated: false
+          })
+
+          expect {
+            described_class.start(['--batch', '--dir', 'videos/', '--remove-bg', '--by-frame'])
+          }.not_to raise_error
+        end
+      end
+    end
   end
 end

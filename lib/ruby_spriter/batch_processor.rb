@@ -133,13 +133,47 @@ module RubySpriter
 
     def process_video(video_file, output_file)
       video_processor = VideoProcessor.new(options)
-      result = video_processor.create_spritesheet(video_file, output_file)
 
-      working_file = result[:output_file]
+      # Check if we need frame-by-frame background removal
+      if options[:by_frame] && options[:remove_bg]
+        # Frame-by-frame processing with background removal
+        # Get GIMP path for VideoProcessor
+        checker = DependencyChecker.new(verbose: false)
+        results = checker.check_all
+        gimp_path = checker.gimp_path
 
-      # Apply GIMP processing if requested
-      if needs_gimp_processing?
-        working_file = process_with_gimp(working_file, result)
+        unless gimp_path
+          raise DependencyError, "GIMP not found but required for --by-frame processing"
+        end
+
+        # Pass gimp_path through options
+        video_options = options.merge(gimp_path: gimp_path)
+        video_processor = VideoProcessor.new(video_options)
+
+        result = video_processor.process_with_background_removal(
+          video_file,
+          output_file,
+          video_options
+        )
+
+        # Normalize result format to match create_spritesheet
+        result = {
+          output_file: result[:output_file],
+          columns: result[:columns],
+          rows: (result[:frames].to_f / result[:columns]).ceil,
+          frames: result[:frames]
+        }
+
+        working_file = result[:output_file]
+      else
+        # Standard video processing
+        result = video_processor.create_spritesheet(video_file, output_file)
+        working_file = result[:output_file]
+
+        # Apply GIMP processing if requested (only for non-by-frame mode)
+        if needs_gimp_processing?
+          working_file = process_with_gimp(working_file, result)
+        end
       end
 
       # Update result with final file

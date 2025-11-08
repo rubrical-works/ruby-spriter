@@ -47,6 +47,24 @@ module RubySpriter
 
     private
 
+    # Check if using frame-by-frame background removal mode
+    # @return [Boolean] true if both --by-frame and --remove-bg flags are set
+    def using_frame_by_frame_background_removal?
+      options[:by_frame] && options[:remove_bg]
+    end
+
+    # Normalize video processing result to standard format
+    # @param result [Hash] Result from process_with_background_removal
+    # @return [Hash] Normalized result with :output_file, :columns, :rows, :frames
+    def normalize_video_result_format(result)
+      {
+        output_file: result[:output_file],
+        columns: result[:columns],
+        rows: (result[:frames].to_f / result[:columns]).ceil,
+        frames: result[:frames]
+      }
+    end
+
     def default_options
       {
         video: nil,
@@ -395,17 +413,35 @@ module RubySpriter
       final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
       # Step 2: Convert video to spritesheet
-      video_processor = VideoProcessor.new(options)
-      result = video_processor.create_spritesheet(
-        options[:video],
-        final_output
-      )
+      # Pass gimp_path through options for background removal
+      video_options = options.merge(gimp_path: @gimp_path)
+      video_processor = VideoProcessor.new(video_options)
+
+      # Check if we need frame-by-frame background removal
+      if using_frame_by_frame_background_removal?
+        # Frame-by-frame processing with background removal
+        result = video_processor.process_with_background_removal(
+          options[:video],
+          final_output,
+          video_options
+        )
+
+        # Convert result to match expected format
+        result = normalize_video_result_format(result)
+      else
+        # Standard video processing
+        result = video_processor.create_spritesheet(
+          options[:video],
+          final_output
+        )
+      end
 
       working_file = result[:output_file]
       intermediate_files = []
 
       # Step 3: Apply GIMP processing if requested
-      if needs_gimp?
+      # Skip GIMP processing if by_frame already handled background removal
+      if needs_gimp? && !using_frame_by_frame_background_removal?
         initial_file = working_file
         working_file = process_with_gimp(working_file)
 

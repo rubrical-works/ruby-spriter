@@ -1,9 +1,83 @@
-
 ---
 
 ### **CHANGELOG.md**
 ```markdown
-## [0.7.0.1] - 2025-11-06
+## [0.7.0.1] - 2025-11-07
+
+### 🎞️ Frame-by-Frame Background Removal Release
+
+#### Added
+- **Frame-by-Frame Processing** (`--by-frame`): Process each video frame individually before assembling spritesheet
+  - Perfect for videos with varying backgrounds (lighting changes, environment changes, camera movement)
+  - Processes each frame with background removal before assembly
+  - Progress indicator: "Processing frame X/Y..."
+  - Adds `processing_mode: by-frame` to PNG metadata
+  - Works with all background removal modes: `--fuzzy`, `--threshold`, `--threshold-stepping`
+  - Compatible with `--scale`, `--sharpen`, `--max-compress`
+  - Supports both `--video` and `--batch` modes
+- **CLI Validation**: `--by-frame` requires both `--video` or `--batch` AND `--remove-bg`
+- **VideoProcessor Enhancement**: New `process_with_background_removal` method for frame-by-frame workflow
+- **Processor Integration**: Automatic routing to frame-by-frame processing when flag is set
+- **BatchProcessor Integration**: Full support for batch processing with frame-by-frame mode
+
+#### Changed
+- **Processing Workflow**: When `--by-frame` is used, workflow changes from "Extract → Assemble → Remove BG" to "Extract → Remove BG (each) → Assemble"
+- **Performance Trade-off**: Frame-by-frame processing is ~16× slower than standard mode (e.g., 16 frames: ~120s vs ~7.5s) but produces superior results for varying backgrounds
+
+#### Technical Details
+- **New Methods**:
+  - `VideoProcessor#process_with_background_removal(video_path, output_path, options)` - Main frame-by-frame processing
+  - `VideoProcessor#process_frames_individually(frame_files, temp_dir, options)` - Per-frame background removal
+  - `VideoProcessor#process_image_with_gimp(input_path, output_path, options)` - Helper for GIMP processing
+  - `VideoProcessor#no_background_filename(filename)` - Generate _nobg filenames
+  - `Processor#using_frame_by_frame_background_removal?` - Check if frame-by-frame mode active
+  - `Processor#normalize_video_result_format(result)` - Normalize result format
+  - `BatchProcessor#process_video` - Updated to support frame-by-frame mode
+- **Constants**: `VideoProcessor::NO_BACKGROUND_SUFFIX = '_nobg'`
+- **Test Coverage**: 12 new tests (5 CLI validation, 3 VideoProcessor, 2 Processor integration, 2 BatchProcessor)
+- **Total Tests**: 455 examples, 0 failures
+
+#### Examples
+```bash
+# Basic frame-by-frame processing
+ruby_spriter --video input.mp4 --remove-bg --by-frame
+
+# With custom grid and scaling
+ruby_spriter --video input.mp4 --remove-bg --by-frame \
+  --frames 32 --columns 8 \
+  --scale 50 --sharpen
+
+# Batch processing with frame-by-frame
+ruby_spriter --batch --dir "videos/" --remove-bg --by-frame
+
+# Combine with threshold stepping for maximum quality
+ruby_spriter --video explosion.mp4 \
+  --remove-bg --by-frame --threshold-stepping \
+  --frames 32 --columns 8
+```
+
+#### When to Use `--by-frame`
+- ✅ Video has changing backgrounds between frames
+- ✅ Character moves through different environments
+- ✅ Lighting conditions vary throughout video
+- ✅ Camera pans or moves during recording
+- ✅ Quality is more important than processing speed
+
+#### Performance Characteristics
+- **Standard Mode**: ~7.5 seconds for 16 frames (1× background removal)
+- **Frame-by-Frame Mode**: ~120 seconds for 16 frames (16× background removal)
+- **Trade-off**: Significantly longer processing time for superior quality with varying backgrounds
+
+#### Backward Compatibility
+- Fully backward compatible - all existing workflows continue to work unchanged
+- `--by-frame` is opt-in and disabled by default
+- No breaking changes to existing features or APIs
+
+Closes #XX (Frame-by-Frame Background Removal)
+
+---
+
+## [0.7.0.1] - 2025-11-06
 
 ### Added
 - BackgroundSampler class for intelligent background color sampling
@@ -767,6 +841,14 @@ Closes #5
 
 ---
 
+[0.7.0.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.7.0...v0.7.0.1
+[0.7.0]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.7.1...v0.7.0
+[0.6.7.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.7...v0.6.7.1
+[0.6.7]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.6...v0.6.7
+[0.6.6]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.5...v0.6.6
+[0.6.5]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.4...v0.6.5
+[0.6.4]: https://github.com/scooter-indie/ruby-spriter/releases/tag/v0.6.4
+[0.6.3]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/scooter-indie/ruby-spriter/releases/tag/v0.6.0

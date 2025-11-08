@@ -143,6 +143,101 @@ RSpec.describe RubySpriter::BatchProcessor do
     end
   end
 
+  describe 'batch processing with --by-frame flag' do
+    let(:options) do
+      {
+        batch: true,
+        dir: test_dir,
+        remove_bg: true,
+        by_frame: true,
+        frame_count: 4,
+        columns: 2
+      }
+    end
+
+    let(:batch_processor) { described_class.new(options) }
+
+    before do
+      # Mock directory with video files
+      allow(Dir).to receive(:glob).with(File.join(test_dir, '*.mp4')).and_return(['test_videos/video1.mp4', 'test_videos/video2.mp4'])
+      allow(File).to receive(:directory?).and_return(true)
+
+      # Mock file validation
+      allow(RubySpriter::Utils::FileHelper).to receive(:validate_readable!)
+
+      # Mock DependencyChecker for GIMP path
+      dependency_checker = instance_double(RubySpriter::DependencyChecker)
+      allow(RubySpriter::DependencyChecker).to receive(:new).and_return(dependency_checker)
+      allow(dependency_checker).to receive(:check_all).and_return({
+        ffmpeg: { available: true },
+        ffprobe: { available: true },
+        imagemagick: { available: true },
+        gimp: { available: true }
+      })
+      allow(dependency_checker).to receive(:gimp_path).and_return('/usr/bin/gimp')
+      allow(dependency_checker).to receive(:gimp_version).and_return({ major: 3, minor: 0 })
+    end
+
+    it 'passes by_frame flag to each video processor' do
+      video_processor1 = instance_double(RubySpriter::VideoProcessor)
+      video_processor2 = instance_double(RubySpriter::VideoProcessor)
+
+      # VideoProcessor.new is called 4 times total (2 videos × 2 calls each):
+      # - First call per video: initial creation (no gimp_path yet)
+      # - Second call per video: with gimp_path merged for by-frame processing
+      call_count = 0
+      expect(RubySpriter::VideoProcessor).to receive(:new).exactly(4).times do |passed_options|
+        call_count += 1
+
+        # Every call should have by_frame and remove_bg
+        expect(passed_options[:by_frame]).to be true
+        expect(passed_options[:remove_bg]).to be true
+
+        # Every 2nd and 4th call should have gimp_path (after merging)
+        if call_count.even?
+          expect(passed_options[:gimp_path]).to eq('/usr/bin/gimp')
+        end
+
+        call_count <= 2 ? video_processor1 : video_processor2
+      end
+
+      # Mock process_with_background_removal to return proper result
+      allow(video_processor1).to receive(:process_with_background_removal).and_return({
+        output_file: 'output1.png',
+        columns: 2,
+        frames: 4,
+        processing_mode: 'by-frame'
+      })
+
+      allow(video_processor2).to receive(:process_with_background_removal).and_return({
+        output_file: 'output2.png',
+        columns: 2,
+        frames: 4,
+        processing_mode: 'by-frame'
+      })
+
+      batch_processor.process
+    end
+
+    it 'reports frame-by-frame processing mode in batch summary' do
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+
+      # Mock process_with_background_removal
+      allow(video_processor).to receive(:process_with_background_removal).and_return({
+        output_file: 'output.png',
+        columns: 2,
+        frames: 4,
+        processing_mode: 'by-frame'
+      })
+
+      result = batch_processor.process
+
+      expect(result[:processed_count]).to eq(2)
+      expect(result[:errors].length).to eq(0)
+    end
+  end
+
   describe '#consolidate_results' do
     let(:spritesheet1) { File.join(test_dir, 'video1_spritesheet.png') }
     let(:spritesheet2) { File.join(test_dir, 'video2_spritesheet.png') }
