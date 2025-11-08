@@ -764,6 +764,21 @@ RSpec.describe RubySpriter::CLI do
         expect(interpolation_line_idx).to be > scale_line_idx
         expect(interpolation_line_idx).to be < sharpen_line_idx
       end
+it 'includes --by-frame flag in video mode help' do
+  output = StringIO.new
+  $stdout = output
+
+  begin
+    described_class.start(['--video', '--help'])
+  rescue SystemExit
+    # Expected
+  ensure
+    $stdout = STDOUT
+  end
+
+  expect(output.string).to include('--by-frame')
+  expect(output.string).to include('Remove background from each frame individually')
+end
 
       it 'shows image mode help with --help' do
         output = StringIO.new
@@ -809,6 +824,21 @@ RSpec.describe RubySpriter::CLI do
 
         expect(output.string).to include('Batch Mode')
       end
+it 'includes --by-frame flag in batch mode help' do
+  output = StringIO.new
+  $stdout = output
+
+  begin
+    described_class.start(['--batch', '--help'])
+  rescue SystemExit
+    # Expected
+  ensure
+    $stdout = STDOUT
+  end
+
+  expect(output.string).to include('--by-frame')
+  expect(output.string).to include('Remove background from each frame individually')
+end
 
       it 'shows split mode help with --help' do
         output = StringIO.new

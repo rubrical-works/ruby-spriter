@@ -36,6 +36,11 @@ RSpec.describe RubySpriter::VideoProcessor do
     before do
       allow(Dir).to receive(:mktmpdir).and_return(temp_dir)
       allow(FileUtils).to receive(:rm_rf)
+
+      # Mock file operations for metadata embedding
+      allow(FileUtils).to receive(:mv)
+      allow(File).to receive(:delete)
+      allow(File).to receive(:exist?).and_return(true)
     end
 
     context 'when by_frame option is true' do
@@ -94,6 +99,19 @@ RSpec.describe RubySpriter::VideoProcessor do
         expect { video_processor.process_with_background_removal(video_path, output_path, options) }
           .to output(/Processing frame \d+\/4.*Processing frame \d+\/4.*Processing frame \d+\/4.*Processing frame \d+\/4/m).to_stdout
       end
+
+      it 'passes temp_dir in options to assemble_spritesheet_from_frames' do
+        allow(video_processor).to receive(:extract_frames).and_return(['frame_001.png'])
+        allow(video_processor).to receive(:process_frames_individually)
+        allow(RubySpriter::MetadataManager).to receive(:embed)
+
+        expect(video_processor).to receive(:assemble_spritesheet_from_frames) do |frames, output, opts|
+          expect(opts[:temp_dir]).to be_a(String)
+          expect(opts[:temp_dir]).to eq('temp_test_dir')
+        end
+
+        video_processor.process_with_background_removal(video_path, output_path, options)
+      end
     end
 
     context 'when by_frame option is false' do
@@ -130,4 +148,132 @@ RSpec.describe RubySpriter::VideoProcessor do
       end
     end
   end
+describe '#extract_frames' do
+  let(:video_processor) { described_class.new }
+  let(:video_file) { 'test_video.mp4' }
+  let(:temp_dir) { 'temp_frames' }
+  let(:options) { { frames: 16, max_width: 320, debug: false } }
+
+  before do
+    # Mock get_duration to return 2.0 seconds
+    allow(video_processor).to receive(:get_duration).and_return(2.0)
+
+    # Mock Open3.capture3 for FFmpeg execution
+    allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+  end
+
+  it 'extracts frames from video using FFmpeg' do
+    expect(Open3).to receive(:capture3) do |cmd|
+      expect(cmd).to include('ffmpeg')
+      expect(cmd).to include('-i')
+      expect(cmd).to include(video_file)
+      expect(cmd).to include('fps=8.0')  # 16 frames / 2.0 seconds
+      expect(cmd).to include('scale=320:-1')
+      expect(cmd).to include('-frames:v 16')
+      ['', '', double(success?: true)]
+    end
+
+    result = video_processor.send(:extract_frames, video_file, temp_dir, options)
+
+    expect(result).to be_an(Array)
+    expect(result.length).to eq(16)
+  end
+
+  it 'returns array of frame filenames' do
+    result = video_processor.send(:extract_frames, video_file, temp_dir, options)
+
+    expect(result).to eq([
+      'frame_001.png', 'frame_002.png', 'frame_003.png', 'frame_004.png',
+      'frame_005.png', 'frame_006.png', 'frame_007.png', 'frame_008.png',
+      'frame_009.png', 'frame_010.png', 'frame_011.png', 'frame_012.png',
+      'frame_013.png', 'frame_014.png', 'frame_015.png', 'frame_016.png'
+    ])
+  end
+
+  it 'raises ProcessingError if FFmpeg fails' do
+    allow(Open3).to receive(:capture3).and_return(['', 'FFmpeg error', double(success?: false)])
+
+    expect {
+      video_processor.send(:extract_frames, video_file, temp_dir, options)
+    }.to raise_error(RubySpriter::ProcessingError, /Failed to extract frames/)
+  end
+end
+describe '#assemble_spritesheet_from_frames' do
+  let(:video_processor) { described_class.new }
+  let(:frame_files) { ['frame_001.png', 'frame_002.png', 'frame_003.png', 'frame_004.png'] }
+  let(:output_path) { 'output_spritesheet.png' }
+  let(:temp_dir) { 'temp_frames' }
+  let(:options) { { columns: 2, temp_dir: temp_dir, debug: false } }
+
+  before do
+    # Mock Open3.capture3 for FFmpeg execution
+    allow(Open3).to receive(:capture3).and_return(['', '', double(success?: true)])
+
+    # Mock file validation
+    allow(RubySpriter::Utils::FileHelper).to receive(:validate_exists!)
+  end
+
+  it 'assembles frames into spritesheet using FFmpeg tile filter' do
+    expect(Open3).to receive(:capture3) do |cmd|
+      expect(cmd).to include('ffmpeg')
+      expect(cmd).to include('-i')
+      expect(cmd).to include('frame_%03d.png')
+      expect(cmd).to include('tile=2x2')  # 4 frames / 2 columns = 2 rows
+      expect(cmd).to include('-frames:v 1')
+      expect(cmd).to include(output_path)
+      ['', '', double(success?: true)]
+    end
+
+    video_processor.send(:assemble_spritesheet_from_frames, frame_files, output_path, options)
+  end
+
+  it 'calculates rows correctly from frame count and columns' do
+    # 4 frames / 2 columns = 2 rows
+    expect(Open3).to receive(:capture3) do |cmd|
+      expect(cmd).to include('tile=2x2')
+      ['', '', double(success?: true)]
+    end
+
+    video_processor.send(:assemble_spritesheet_from_frames, frame_files, output_path, options)
+  end
+
+  it 'handles non-evenly divisible frame counts with ceiling' do
+    # 5 frames / 2 columns = 2.5 → 3 rows (ceiling)
+    frame_files_odd = ['frame_001.png', 'frame_002.png', 'frame_003.png', 'frame_004.png', 'frame_005.png']
+
+    expect(Open3).to receive(:capture3) do |cmd|
+      expect(cmd).to include('tile=2x3')
+      ['', '', double(success?: true)]
+    end
+
+    video_processor.send(:assemble_spritesheet_from_frames, frame_files_odd, output_path, options)
+  end
+
+  it 'raises ProcessingError if FFmpeg fails' do
+    allow(Open3).to receive(:capture3).and_return(['', 'FFmpeg error', double(success?: false)])
+
+    expect {
+      video_processor.send(:assemble_spritesheet_from_frames, frame_files, output_path, options)
+    }.to raise_error(RubySpriter::ProcessingError, /Failed to assemble spritesheet/)
+  end
+
+it 'validates output file exists after assembly' do
+  expect(RubySpriter::Utils::FileHelper).to receive(:validate_exists!).with(output_path)
+
+  video_processor.send(:assemble_spritesheet_from_frames, frame_files, output_path, options)
+end
+
+it 'handles frame files with _nobg suffix' do
+  frame_files_nobg = ['frame_001_nobg.png', 'frame_002_nobg.png', 'frame_003_nobg.png', 'frame_004_nobg.png']
+
+  expect(Open3).to receive(:capture3) do |cmd|
+    expect(cmd).to include('frame_%03d_nobg.png')
+    expect(cmd).to include('tile=2x2')
+    ['', '', double(success?: true)]
+  end
+
+  video_processor.send(:assemble_spritesheet_from_frames, frame_files_nobg, output_path, options)
+end
+end
+
 end

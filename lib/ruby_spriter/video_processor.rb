@@ -107,27 +107,35 @@ module RubySpriter
 
           # Assemble spritesheet from processed frames
           processed_frames = frame_files.map { |f| no_background_filename(f) }
-          assemble_spritesheet_from_frames(processed_frames, output_path, options)
+          assemble_spritesheet_from_frames(processed_frames, output_path, options.merge(temp_dir: temp_dir))
         else
           # Standard processing: assemble first, then process spritesheet
-          assemble_spritesheet_from_frames(frame_files, output_path, options)
+          assemble_spritesheet_from_frames(frame_files, output_path, options.merge(temp_dir: temp_dir))
 
           # Apply background removal to entire spritesheet
           process_image_with_gimp(output_path, output_path, options)
         end
 
-        # Add metadata using class method (correct API)
-        metadata_hash = {
-          'columns' => options[:columns].to_s,
-          'frames' => options[:frames].to_s
-        }
+        # Calculate rows for metadata
+        columns = options[:columns] || 4
+        frames = options[:frames] || 16
+        rows = (frames.to_f / columns).ceil
 
-        # Add processing_mode if by_frame was used
-        if options[:by_frame]
-          metadata_hash['processing_mode'] = 'by-frame'
-        end
+        # Embed metadata using temp file pattern (like create_spritesheet does)
+        temp_file = output_path.sub('.png', '_temp.png')
+        FileUtils.mv(output_path, temp_file)
 
-        RubySpriter::MetadataManager.embed(output_path, metadata_hash)
+        RubySpriter::MetadataManager.embed(
+          temp_file,
+          output_path,
+          columns: columns,
+          rows: rows,
+          frames: frames,
+          debug: options[:debug]
+        )
+
+        # Clean up temp file
+        File.delete(temp_file) if File.exist?(temp_file)
 
         # Return processing results
         {
@@ -166,6 +174,107 @@ module RubySpriter
     # @return [String] Filename with _nobg suffix
     def no_background_filename(filename)
       filename.sub('.png', "#{NO_BACKGROUND_SUFFIX}.png")
+    end
+
+    # Extract individual frames from video file
+    # @param video_path [String] Path to input video file
+    # @param temp_dir [String] Directory to store extracted frames
+    # @param options [Hash] Processing options
+    # @option options [Integer] :frames Number of frames to extract (default: 16)
+    # @option options [Integer] :max_width Maximum frame width (default: 320)
+    # @option options [Boolean] :debug Enable debug output
+    # @return [Array<String>] Array of frame filenames (basenames only, not full paths)
+    def extract_frames(video_path, temp_dir, options)
+      frame_count = options[:frames] || 16
+      max_width = options[:max_width] || 320
+
+      # Get video duration to calculate FPS
+      duration = get_duration(video_path)
+      fps = (frame_count / duration.to_f).round(6)
+
+      # Output pattern for frames
+      output_pattern = File.join(temp_dir, 'frame_%03d.png')
+
+      # Build FFmpeg command
+      cmd = [
+        'ffmpeg',
+        '-i', Utils::PathHelper.quote_path(video_path),
+        '-vf', "fps=#{fps},scale=#{max_width}:-1:flags=lanczos",
+        '-frames:v', frame_count.to_s,
+        Utils::PathHelper.quote_path(output_pattern),
+        '-hide_banner',
+        options[:debug] ? '-loglevel info' : '-loglevel error'
+      ].join(' ')
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Extracting frames with command:")
+        Utils::OutputFormatter.indent(cmd)
+      end
+
+      # Execute FFmpeg
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Failed to extract frames: #{stderr}"
+      end
+
+      # Return array of frame filenames (basenames only)
+      (1..frame_count).map { |i| format('frame_%03d.png', i) }
+    end
+
+
+    # Assemble individual frames into a spritesheet
+    # @param frame_files [Array<String>] Array of frame filenames (basenames)
+    # @param output_path [String] Path to output spritesheet
+    # @param options [Hash] Processing options
+    # @option options [Integer] :columns Number of columns in grid (default: 4)
+    # @option options [String] :temp_dir Temporary directory containing frames
+    # @option options [Boolean] :debug Enable debug output
+    # @return [void]
+    def assemble_spritesheet_from_frames(frame_files, output_path, options)
+      columns = options[:columns] || 4
+      frame_count = frame_files.length
+      rows = (frame_count.to_f / columns).ceil
+      temp_dir = options[:temp_dir]
+
+      # Detect the pattern from the first filename
+      # Examples: frame_001.png → frame_%03d.png
+      #           frame_001_nobg.png → frame_%03d_nobg.png
+      first_file = frame_files.first
+      pattern = if first_file.include?('_nobg.png')
+                  'frame_%03d_nobg.png'
+                else
+                  'frame_%03d.png'
+                end
+
+      # Input pattern for frames
+      input_pattern = File.join(temp_dir, pattern)
+
+      # Build FFmpeg command
+      cmd = [
+        'ffmpeg',
+        '-i', Utils::PathHelper.quote_path(input_pattern),
+        '-filter_complex', "tile=#{columns}x#{rows}",
+        '-frames:v', '1',
+        '-y',
+        Utils::PathHelper.quote_path(output_path),
+        '-hide_banner',
+        options[:debug] ? '-loglevel info' : '-loglevel error'
+      ].join(' ')
+
+      if options[:debug]
+        Utils::OutputFormatter.indent("DEBUG: Assembling spritesheet with command:")
+        Utils::OutputFormatter.indent(cmd)
+      end
+
+      # Execute FFmpeg
+      stdout, stderr, status = Open3.capture3(cmd)
+
+      unless status.success?
+        raise ProcessingError, "Failed to assemble spritesheet: #{stderr}"
+      end
+
+      Utils::FileHelper.validate_exists!(output_path)
     end
 
     def process_frames_individually(frame_files, temp_dir, options)

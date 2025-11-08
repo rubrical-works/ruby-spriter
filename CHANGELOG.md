@@ -5,6 +5,77 @@
 ## [0.7.0.1] - 2025-11-07
 ### 🔧 Code Quality & Performance Release (Nov 8, 2025)
 
+### 🐛 Bug Fixes (Nov 8, 2025)
+
+#### Fixed
+- **Missing `--by-frame` Flag in Help Text**: Added `--by-frame` to context-sensitive help
+  - Now appears in `--video --help` output under "Background Removal Options"
+  - Now appears in `--batch --help` output under "Background Removal Options"
+  - Now appears in `--image --help` output under "Background Removal Options"
+  - Description: "Remove background from each frame individually (slower, better quality)"
+  - Proper indentation with tree character (└─) showing hierarchy under `--remove-bg`
+
+- **Runtime Error with `--by-frame` Flag**: Fixed `NoMethodError: undefined method 'extract_frames'`
+  - **Root Causes Identified**:
+    1. `extract_frames` method didn't exist in VideoProcessor
+    2. `assemble_spritesheet_from_frames` method didn't exist in VideoProcessor
+    3. `temp_dir` not passed in options hash to assembly method
+    4. Pattern detection missing for `_nobg` suffix in frame filenames
+    5. Metadata embedding using incorrect API (single argument instead of two)
+
+  - **Fixes Implemented**:
+    1. ✅ Implemented `VideoProcessor#extract_frames(video_path, temp_dir, options)`
+       - Extracts individual frames from video using FFmpeg
+       - Calculates FPS based on video duration and frame count
+       - Returns array of frame filenames (basenames only)
+       - Proper error handling with ProcessingError
+
+    2. ✅ Implemented `VideoProcessor#assemble_spritesheet_from_frames(frame_files, output_path, options)`
+       - Assembles frames into spritesheet using FFmpeg tile filter
+       - Automatic row calculation with ceiling division
+       - Pattern detection for `_nobg` suffix (handles both regular and processed frames)
+       - Validates output file exists after assembly
+
+    3. ✅ Fixed `temp_dir` passing in options
+       - `process_with_background_removal` now merges `temp_dir` into options
+       - Both by-frame and standard paths correctly pass temp directory
+
+    4. ✅ Added pattern detection for `_nobg` suffix
+       - Detects suffix from first filename in array
+       - Constructs correct FFmpeg input pattern: `frame_%03d.png` or `frame_%03d_nobg.png`
+       - Handles frame-by-frame processed files correctly
+
+    5. ✅ Fixed metadata embedding API
+       - Changed from single-argument hash to two-argument form with keywords
+       - Uses temp file pattern: create temp → embed metadata → cleanup
+       - Matches `create_spritesheet` implementation pattern
+       - Properly calculates rows for metadata
+
+#### Test Coverage
+- **11 New Tests Added** (470 → 481 examples, all passing)
+  - CLI help text: 2 tests (video mode, batch mode)
+  - `extract_frames`: 3 tests (FFmpeg command, return value, error handling)
+  - `assemble_spritesheet_from_frames`: 6 tests (assembly, row calculation, ceiling division, _nobg suffix, error handling, file validation)
+- **Code Coverage**: Increased to 19.23% (457 / 2377 lines)
+- **No Regressions**: All existing tests continue to pass
+
+#### Real-World Testing
+- ✅ Tested with actual video file processing
+- ✅ Frame-by-frame processing completes successfully
+- ✅ All frames extracted and processed individually
+- ✅ Spritesheet assembled correctly from processed frames
+- ✅ Metadata embedded properly
+- ✅ Output file created successfully
+
+#### Files Modified
+- `lib/ruby_spriter/cli.rb` - Added `--by-frame` to help text (3 locations)
+- `lib/ruby_spriter/video_processor.rb` - Implemented missing methods, fixed bugs
+- `spec/ruby_spriter/cli_spec.rb` - Added 2 help text tests
+- `spec/ruby_spriter/video_processor_spec.rb` - Added 9 method tests
+- `requirements/Ruby Spriter v0.7.0.1 Bug Fixes.md` - Updated to Revision 2
+
+
+
 #### Refactored
 - **BatchProcessor Architecture**: Eliminated code duplication and improved performance
   - **Eager Dependency Checking**: Dependencies now checked once during initialization (not per video)
