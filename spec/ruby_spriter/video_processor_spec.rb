@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require_relative '../../lib/ruby_spriter/cell_cleanup_processor'
 
 RSpec.describe RubySpriter::VideoProcessor do
   describe '#create_spritesheet' do
@@ -25,6 +26,7 @@ RSpec.describe RubySpriter::VideoProcessor do
       expect(result[:rows]).to eq(4)
       expect(result[:frames]).to eq(16)
     end
+
   end
 
   describe '#process_with_background_removal' do
@@ -145,6 +147,71 @@ RSpec.describe RubySpriter::VideoProcessor do
         allow(RubySpriter::MetadataManager).to receive(:embed)
 
         video_processor.process_with_background_removal(video_path, output_path, options)
+      end
+
+      context 'with cell cleanup enabled' do
+        let(:cleanup_options) do
+          {
+            by_frame: false,
+            remove_bg: true,
+            cleanup_cells: true,
+            frames: 4,
+            columns: 2,
+            gimp_path: '/usr/bin/gimp',
+            cell_cleanup_threshold: 15.0
+          }
+        end
+
+        it 'applies cell cleanup after background removal' do
+          # Mock frame extraction
+          frame_files = ['frame_001.png', 'frame_002.png', 'frame_003.png', 'frame_004.png']
+          allow(video_processor).to receive(:extract_frames).and_return(frame_files)
+
+          # Mock spritesheet assembly
+          allow(video_processor).to receive(:assemble_spritesheet_from_frames)
+
+          # Mock GIMP processing
+          gimp_processor = instance_double(RubySpriter::GimpProcessor)
+          allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_processor)
+          allow(gimp_processor).to receive(:process).and_return(output_path)
+
+          # Mock cell cleanup
+          mock_cell_processor = instance_double(RubySpriter::CellCleanupProcessor)
+          expect(RubySpriter::CellCleanupProcessor).to receive(:new)
+            .with(cleanup_options)
+            .and_return(mock_cell_processor)
+          expect(mock_cell_processor).to receive(:cleanup_cells)
+            .with(output_path, cleanup_options)
+            .and_return({ processed: 4, cleaned: 2, skipped: 2 })
+
+          # Mock metadata
+          allow(RubySpriter::MetadataManager).to receive(:embed)
+
+          video_processor.process_with_background_removal(video_path, output_path, cleanup_options)
+        end
+
+        it 'skips cell cleanup when flag is false' do
+          # Mock frame extraction
+          frame_files = ['frame_001.png', 'frame_002.png', 'frame_003.png', 'frame_004.png']
+          allow(video_processor).to receive(:extract_frames).and_return(frame_files)
+
+          # Mock spritesheet assembly
+          allow(video_processor).to receive(:assemble_spritesheet_from_frames)
+
+          # Mock GIMP processing
+          gimp_processor = instance_double(RubySpriter::GimpProcessor)
+          allow(RubySpriter::GimpProcessor).to receive(:new).and_return(gimp_processor)
+          allow(gimp_processor).to receive(:process).and_return(output_path)
+
+          # Should NOT instantiate CellCleanupProcessor
+          expect(RubySpriter::CellCleanupProcessor).not_to receive(:new)
+
+          # Mock metadata
+          allow(RubySpriter::MetadataManager).to receive(:embed)
+
+          no_cleanup_options = cleanup_options.merge(cleanup_cells: false)
+          video_processor.process_with_background_removal(video_path, output_path, no_cleanup_options)
+        end
       end
     end
   end

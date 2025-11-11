@@ -57,6 +57,27 @@ module RubySpriter
         end
       end
 
+      # Validate --cleanup-cells flag requirements
+      if options[:cleanup_cells]
+        unless options[:remove_bg]
+          raise ValidationError, "--cleanup-cells requires --remove-bg flag"
+        end
+
+        if options[:by_frame]
+          raise ValidationError, "--cleanup-cells cannot be used with --by-frame (redundant)"
+        end
+
+        unless options[:video] || options[:batch]
+          raise ValidationError, "--cleanup-cells requires --video or --batch mode"
+        end
+
+        if options[:cell_cleanup_threshold]
+          unless options[:cell_cleanup_threshold].between?(1.0, 50.0)
+            raise ValidationError, "--cell-cleanup-threshold must be between 1.0 and 50.0"
+          end
+        end
+      end
+
       # Run processor
       processor = Processor.new(options)
       processor.run
@@ -250,6 +271,15 @@ module RubySpriter
 
       opts.on('--by-frame', 'Remove background from each frame individually (video/batch mode only)') do
         options[:by_frame] = true
+      end
+
+      opts.on('--cleanup-cells', 'Apply cell-based background cleanup (requires --remove-bg, cannot use with --by-frame)') do
+        options[:cleanup_cells] = true
+      end
+
+      opts.on('--cell-cleanup-threshold N', Float,
+              'Minimum percentage for dominant color detection (default: 15.0, range: 1.0-50.0)') do |n|
+        options[:cell_cleanup_threshold] = n
       end
 
       opts.separator ""

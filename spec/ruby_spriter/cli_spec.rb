@@ -1971,5 +1971,61 @@ end
         end
       end
     end
+
+    describe '--cleanup-cells flag validation' do
+      it 'requires --remove-bg flag' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--cleanup-cells'])
+        end.to raise_error(RubySpriter::ValidationError, /requires --remove-bg/)
+      end
+
+      it 'cannot be used with --by-frame' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--by-frame', '--cleanup-cells'])
+        end.to raise_error(RubySpriter::ValidationError, /cannot be used with --by-frame/)
+      end
+
+      it 'requires video or batch mode' do
+        # Create a temporary image file for testing
+        temp_dir = Dir.mktmpdir
+        temp_file = File.join(temp_dir, 'test.png')
+        FileUtils.touch(temp_file)
+
+        begin
+          expect do
+            described_class.start(['--image', temp_file, '--remove-bg', '--cleanup-cells'])
+          end.to raise_error(RubySpriter::ValidationError, /requires --video or --batch/)
+        ensure
+          FileUtils.rm_rf(temp_dir)
+        end
+      end
+
+      it 'validates cell-cleanup-threshold range (too low)' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '0.5'])
+        end.to raise_error(RubySpriter::ValidationError, /between 1.0 and 50.0/)
+      end
+
+      it 'validates cell-cleanup-threshold range (too high)' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '55.0'])
+        end.to raise_error(RubySpriter::ValidationError, /between 1.0 and 50.0/)
+      end
+
+      it 'accepts valid configuration' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:cleanup_cells]).to be true
+          expect(options[:cell_cleanup_threshold]).to eq(20.0)
+          processor_double
+        end
+
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '20.0'])
+        end.not_to raise_error
+      end
+    end
   end
 end

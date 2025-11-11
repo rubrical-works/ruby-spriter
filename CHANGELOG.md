@@ -2,8 +2,86 @@
 
 ### **CHANGELOG.md**
 ```markdown
-## [0.7.0.1] - 2025-11-07
-### 🔧 Code Quality & Performance Release (Nov 8, 2025)
+## [0.7.0.1] - 2025-11-07 to 2025-11-11
+### 🔧 Code Quality & Performance Release (Nov 8-11, 2025)
+
+### 🎨 Cell-Based Background Cleanup (EXPERIMENTAL - Nov 10-11, 2025)
+
+#### Added
+- **Cell-Based Background Cleanup** (`--cleanup-cells`): Post-process residual backgrounds from finished spritesheets
+  - Analyzes each cell independently for dominant background colors exceeding threshold
+  - Uses GIMP to remove detected dominant colors from individual cells
+  - Configurable threshold via `--cell-cleanup-threshold` (default: 15.0%, range: 1.0-50.0)
+  - Requires `--remove-bg` flag (validates usage)
+  - Cannot be combined with `--by-frame` (redundant - by-frame already handles per-frame cleanup)
+  - Works with both `--video` and `--batch` modes
+  - Progress reporting shows cells processed/cleaned/skipped counts
+  - ⚠️ **Experimental**: Feature is technically complete and all tests pass, but background removal is not yet effective in practice. Requires algorithm optimization. Not recommended for production use.
+
+#### New Classes
+- **CellCleanupProcessor** (`lib/ruby_spriter/cell_cleanup_processor.rb`)
+  - Orchestrates cell-by-cell analysis and cleanup
+  - Methods: `cleanup_cells`, `extract_cell`, `analyze_cell_colors`, `remove_dominant_colors`, `reassemble_spritesheet`
+  - Integrates with GimpProcessor for color selection
+  - Returns statistics: `{ processed: N, cleaned: N, skipped: N, colors_removed: N }`
+
+- **CellCleanupConfig** (`lib/ruby_spriter/cell_cleanup_config.rb`)
+  - Configuration validation for cleanup parameters
+  - Validates threshold range (1.0-50.0)
+
+- **CellCleanupGimpScript** (`lib/ruby_spriter/cell_cleanup_gimp_script.rb`)
+  - Generates GIMP 3.x Python-fu scripts for cell cleanup
+  - Handles path normalization for Windows
+  - Uses exact color matching with Gegl.Color API
+  - Proper garbage collection to prevent memory leaks
+
+#### Integration
+- **Processor**: Updated `apply_cell_cleanup` method with proper parameter passing
+- **VideoProcessor**: Added cell cleanup step after standard background removal in pipeline
+- **BatchProcessor**: Cell cleanup automatically applies to all videos when flag set
+- **Execution Order**: Standard BG removal → Cell-based cleanup → Scaling/Sharpening/Compression
+
+#### Test Coverage
+- **21 New Tests Added**: CellCleanupProcessor (13), CellCleanupConfig (4), CellCleanupGimpScript (4)
+- **CLI Validation**: 6 tests for flag combination validation
+- **Integration Tests**: 2 VideoProcessor integration tests
+- **Total**: 512 examples, 0 failures
+- **Code Coverage**: 72.58% (1844 / 2544 lines)
+
+#### Technical Details
+- Uses ImageMagick `histogram:info` for dominant color detection
+- Skips transparent pixels in histogram analysis
+- Uses GIMP `gimp-image-select-color` with REPLACE (first color) and ADD (subsequent colors) operations
+- Clears selection with `gimp-drawable-edit-clear` to make colors transparent
+- Reassembles cells using ImageMagick `montage` with no gaps/borders
+
+#### Known Issues (Deferred to v0.7.0.2)
+1. **Ineffective Background Removal** (AC-35, AC-48)
+   - Feature executes without errors but doesn't effectively remove backgrounds
+   - GIMP color selection may need explicit threshold parameter
+   - Requires algorithm investigation and refinement
+
+2. **Performance Exceeds Target** (AC-41)
+   - Adds more than 30% overhead to total processing time
+   - Each cell invokes separate GIMP process (16 invocations for 16-cell spritesheet)
+   - Requires parallel processing optimization
+
+3. **Missing PNG Metadata** (AC-39)
+   - Cell cleanup statistics not embedded in PNG metadata
+   - Low priority - informational only
+
+#### Fixes
+- **Division by Zero in Cell Cleanup**: Fixed parameter passing through pipeline (frames/columns not passed to cleanup_cells)
+- **GIMP Script Generation**: Corrected path normalization, Gegl.Color API, removed non-existent threshold property
+- **Module Loading**: Added missing require for CellCleanupGimpScript in CellCleanupProcessor
+
+#### Documentation
+- Updated requirements document (Revision #11)
+- Added 49 acceptance criteria tracking table
+- Marked feature as "Implemented but requires optimization"
+- Added comprehensive known issues section with root cause analysis
+
+---
 
 ### 🐛 Bug Fixes (Nov 8, 2025)
 

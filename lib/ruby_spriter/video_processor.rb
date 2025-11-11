@@ -116,6 +116,13 @@ module RubySpriter
           process_image_with_gimp(output_path, output_path, options)
         end
 
+        # Cell-based cleanup (if --cleanup-cells flag present)
+        if options[:cleanup_cells]
+          require_relative 'cell_cleanup_processor'
+          cell_processor = CellCleanupProcessor.new(options)
+          stats = cell_processor.cleanup_cells(output_path, options)
+        end
+
         # Calculate rows for metadata
         columns = options[:columns] || 4
         frames = options[:frames] || 16

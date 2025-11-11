@@ -733,6 +733,105 @@ RSpec.describe RubySpriter::Processor do
     end
   end
 
+  describe 'cell cleanup in standard video workflow' do
+    let(:options) do
+      {
+        video: 'input.mp4',
+        remove_bg: true,
+        cleanup_cells: true,
+        cell_cleanup_threshold: 15.0,
+        columns: 4,
+        frames: 16,
+        overwrite: true
+      }
+    end
+
+    let(:processor) { described_class.new(options) }
+
+    before do
+      # Mock dependency checker
+      dependency_checker = instance_double(RubySpriter::DependencyChecker)
+      allow(RubySpriter::DependencyChecker).to receive(:new).and_return(dependency_checker)
+      allow(dependency_checker).to receive(:check_all).and_return({
+        ffmpeg: { available: true },
+        ffprobe: { available: true },
+        imagemagick: { available: true },
+        gimp: { available: true }
+      })
+      allow(dependency_checker).to receive(:gimp_path).and_return('/usr/bin/gimp')
+      allow(dependency_checker).to receive(:gimp_version).and_return({ major: 3, minor: 0 })
+      allow(dependency_checker).to receive(:print_report)
+
+      # Mock temp directory
+      allow(Dir).to receive(:mktmpdir).and_return('/tmp/test')
+      allow(FileUtils).to receive(:rm_rf)
+      allow(FileUtils).to receive(:cp)
+
+      # Mock file validation and operations
+      allow(File).to receive(:exist?).and_return(true)
+      allow(File).to receive(:delete)
+    end
+
+    it 'applies cell cleanup after GIMP background removal' do
+      # Mock VideoProcessor
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+      allow(video_processor).to receive(:create_spritesheet).and_return({
+        output_file: 'spritesheet.png',
+        columns: 4,
+        rows: 4,
+        frames: 16,
+        size: 1000
+      })
+
+      # Mock GIMP processing
+      allow(processor).to receive(:needs_gimp?).and_return(true)
+      allow(processor).to receive(:using_frame_by_frame_background_removal?).and_return(false)
+      allow(processor).to receive(:process_with_gimp).and_return('spritesheet_nobg.png')
+
+      # Expect cell cleanup to be called after GIMP with cleanup options
+      expect(processor).to receive(:apply_cell_cleanup)
+        .with('spritesheet_nobg.png', hash_including(frames: 16, columns: 4))
+        .and_return('spritesheet_cleaned.png')
+
+      # Mock output file operations
+      allow(processor).to receive(:cleanup_intermediate_files)
+      allow(File).to receive(:size).and_return(1000)
+
+      processor.send(:execute_video_workflow)
+    end
+
+    it 'skips cell cleanup when cleanup_cells flag is false' do
+      # Mock VideoProcessor
+      video_processor = instance_double(RubySpriter::VideoProcessor)
+      allow(RubySpriter::VideoProcessor).to receive(:new).and_return(video_processor)
+      allow(video_processor).to receive(:create_spritesheet).and_return({
+        output_file: 'spritesheet.png',
+        columns: 4,
+        rows: 4,
+        frames: 16,
+        size: 1000
+      })
+
+      # Mock GIMP processing
+      allow(processor).to receive(:needs_gimp?).and_return(true)
+      allow(processor).to receive(:using_frame_by_frame_background_removal?).and_return(false)
+      allow(processor).to receive(:process_with_gimp).and_return('spritesheet_nobg.png')
+
+      # Should NOT call apply_cell_cleanup
+      expect(processor).not_to receive(:apply_cell_cleanup)
+
+      # Mock output file operations
+      allow(processor).to receive(:cleanup_intermediate_files)
+      allow(File).to receive(:size).and_return(1000)
+
+      # Set cleanup_cells to false
+      processor.options[:cleanup_cells] = false
+
+      processor.send(:execute_video_workflow)
+    end
+  end
+
   describe 'video workflow with --by-frame flag' do
     let(:options) do
       {

@@ -445,6 +445,16 @@ module RubySpriter
         initial_file = working_file
         working_file = process_with_gimp(working_file)
 
+        # Apply cell cleanup after GIMP background removal
+        if options[:cleanup_cells] && options[:remove_bg]
+          # Pass frame count and columns to cell cleanup
+          cleanup_options = options.merge(
+            frames: result[:frames],
+            columns: result[:columns]
+          )
+          working_file = apply_cell_cleanup(working_file, cleanup_options)
+        end
+
         # Track intermediate files for cleanup (everything except initial and final)
         if working_file != initial_file
           intermediate_files = collect_intermediate_files(initial_file, working_file)
@@ -783,6 +793,28 @@ module RubySpriter
       gimp_options = options.merge(gimp_version: @gimp_version)
       gimp_processor = GimpProcessor.new(@gimp_path, gimp_options)
       gimp_processor.process(input_file)
+    end
+
+    def apply_cell_cleanup(working_file, cleanup_options = {})
+      Utils::OutputFormatter.header("CELL CLEANUP")
+      Utils::OutputFormatter.indent("Analyzing and removing residual background colors from spritesheet cells...")
+
+      require_relative 'cell_cleanup_processor'
+      cell_processor = CellCleanupProcessor.new(cleanup_options.merge(gimp_path: @gimp_path))
+
+      # Process the spritesheet
+      stats = cell_processor.cleanup_cells(working_file, cleanup_options)
+
+      Utils::OutputFormatter.success("Cell cleanup complete")
+      if stats
+        Utils::OutputFormatter.indent("Processed: #{stats[:processed]} cells")
+        Utils::OutputFormatter.indent("Cleaned: #{stats[:cleaned]} cells")
+        Utils::OutputFormatter.indent("Skipped: #{stats[:skipped]} cells")
+        Utils::OutputFormatter.indent("Colors removed: #{stats[:colors_removed]}")
+      end
+
+      # Cell cleanup modifies the file in-place, so return the same path
+      working_file
     end
 
     def sample_edge_colors(input_file)
