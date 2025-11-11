@@ -26,8 +26,8 @@ module RubySpriter
       Utils::OutputFormatter.header("GIMP Processing")
 
       # Inform about Xvfb usage on Linux
-      if Platform.linux? && gimp_path.start_with?('flatpak:')
-        Utils::OutputFormatter.note("Using GIMP via Xvfb (virtual display)")
+      if Platform.linux?
+        Utils::OutputFormatter.note("Using GIMP via Xvfb (virtual display - no GUI windows)")
       end
 
       # Inform user if automatic operation order optimization is applied
@@ -806,8 +806,10 @@ module RubySpriter
 
     # Unix execution (Linux/macOS)
     def execute_gimp_unix(script_file, log_file)
-      # Check if we're using Flatpak GIMP (needs xvfb-run)
-      use_xvfb = gimp_path.start_with?('flatpak:')
+      # On Linux, always use xvfb-run for headless operation (prevents GUI windows)
+      # On macOS, run GIMP directly
+      use_xvfb = Platform.linux?
+      is_flatpak = gimp_path.start_with?('flatpak:')
 
       if gimp2?
         # GIMP 2.x: Use gimp-console for batch processing
@@ -815,14 +817,24 @@ module RubySpriter
         cmd = "#{Utils::PathHelper.quote_path(gimp_console_path)} -i --no-splash --batch-interpreter python-fu-eval -b 'exec(open(\"#{script_file}\").read())' -b '(gimp-quit 0)' > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
       else
         # GIMP 3.x command
-        if use_xvfb
-          # Flatpak GIMP needs xvfb-run to provide virtual display
+        if is_flatpak
+          # Flatpak GIMP with xvfb-run for headless operation
           # Use --nosocket options to prevent Flatpak from accessing host display
           flatpak_app = gimp_path.sub('flatpak:', '')
-          cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          if use_xvfb
+            cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          else
+            cmd = "flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          end
         else
-          # Regular GIMP 3.x installation
-          cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          # Native GIMP 3.x installation
+          if use_xvfb
+            # On Linux, wrap with xvfb-run to prevent GUI windows
+            cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' #{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          else
+            # On macOS, run GIMP directly
+            cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+          end
         end
       end
 
