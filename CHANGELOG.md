@@ -370,9 +370,9 @@ Major feature release introducing advanced background removal capabilities with 
 5. **Smoke Detection** (always active when `--remove-bg`)
 
 ##### GIMP Version Requirement
-- **Minimum Version**: Now requires GIMP 3.0+ for best results
-  - GIMP 2.10 still supported but may have compatibility issues with new features
-  - Recommend upgrading to GIMP 3.x for full feature compatibility
+- **Requires GIMP 3.x**: GIMP 2.x is NOT supported
+- **Ubuntu 25.04+**: Native GIMP 3.x package available
+- **Older distributions**: Use Flatpak for GIMP 3.x installation
 
 #### Performance
 

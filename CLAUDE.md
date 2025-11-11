@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.7.1
+**Current Version**: 0.7.0.1
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -14,7 +14,7 @@ Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from vi
 The tool orchestrates several external command-line tools:
 - **FFmpeg/FFprobe**: Video frame extraction and analysis
 - **ImageMagick**: Metadata management, consolidation, and sharpening
-- **GIMP 3.x (or 2.10)**: Image processing (scaling with interpolation, background removal)
+- **GIMP 3.x**: Image processing (scaling with interpolation, background removal) - **GIMP 2.x is NOT supported**
 - **Xvfb** (Linux only): Virtual display for headless GIMP operation
 
 All external dependencies are checked at runtime via `DependencyChecker` (lib/ruby_spriter/dependency_checker.rb).
@@ -86,8 +86,8 @@ Ruby Spriter operates in seven distinct modes, orchestrated by `Processor`:
 
 1. **Video Mode** (`--video`): Convert MP4 to spritesheet using `VideoProcessor`
 2. **Image Mode** (`--image`): Process existing PNG with GIMP using `GimpProcessor`
-   - **Extract Sub-mode** (`--extract`): Extract specific frames and create new spritesheet (v0.6.8+)
-   - **Add Metadata Sub-mode** (`--add-meta`): Add metadata to external spritesheets (v0.6.8+)
+   - **Extract Sub-mode** (`--extract`): Extract specific frames and create new spritesheet (v0.7.0+)
+   - **Add Metadata Sub-mode** (`--add-meta`): Add metadata to external spritesheets (v0.7.0+)
 3. **Consolidate Mode** (`--consolidate`): Stack multiple spritesheets using `Consolidator`
 4. **Batch Mode** (`--batch`): Process multiple MP4 files in a directory using `BatchProcessor`
 5. **Verify Mode** (`--verify`): Read and display embedded metadata
@@ -115,7 +115,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 
 **GimpProcessor** (lib/ruby_spriter/gimp_processor.rb)
 - Generates Python-fu scripts for GIMP 3.x batch processing
-- Supports both GIMP 2.x and 3.x APIs (version-aware)
+- **Requires GIMP 3.x** (GIMP 2.x is not supported)
 - Supports 5 interpolation methods: none, linear, cubic, nohalo (default), lohalo
 - Automatically optimizes operation order (remove background before scale) when both operations requested
 - Applies sharpening via ImageMagick after GIMP operations (not GIMP GEGL due to batch mode limitations)
@@ -152,7 +152,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Provides compression statistics (original size, compressed size, reduction percentage)
 - Works with all processing modes: --video, --image, --batch, --consolidate
 
-**Frame Extraction Workflow** (`--extract`, v0.6.8+)
+**Frame Extraction Workflow** (`--extract`, v0.7.0+)
 - Extracts specific frames by number from a spritesheet
 - Uses `SpritesheetSplitter` to extract all frames to temp directory
 - Keeps only requested frames, deletes the rest
@@ -167,7 +167,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Implemented in `Processor#execute_extract_workflow` and `Processor#reassemble_frames`
 - Mutual exclusivity with `--split` (validated in CLI)
 
-**Metadata Addition Workflow** (`--add-meta`, v0.6.8+)
+**Metadata Addition Workflow** (`--add-meta`, v0.7.0+)
 - Adds spritesheet metadata to external images without embedded metadata
 - Validates image dimensions divide evenly by specified grid
 - Supports partial grids (custom frame count with `--frames`)
@@ -188,8 +188,9 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 **Platform** (lib/ruby_spriter/platform.rb)
 - Detects OS (Windows, Linux, macOS)
 - Provides platform-specific paths (GIMP executable, ImageMagick commands)
-- Detects GIMP version (2.x or 3.x) from executable or Flatpak
-- Supports Flatpak GIMP installation (`flatpak:org.gimp.GIMP`)
+- Detects and validates GIMP 3.x installation
+- Supports Flatpak GIMP installation (`flatpak:org.gimp.GIMP`) on older Linux distributions
+- Native GIMP 3.x package support on Ubuntu 25.04+
 - Abstracts platform differences
 
 ### Utilities
@@ -295,8 +296,8 @@ Tests use RSpec and follow the pattern:
 - **Path Handling**: All paths are quoted appropriately for shell commands via `PathHelper.quote_path`
 - **Error Handling**: Custom exceptions (DependencyError, ProcessingError, ValidationError) for clear error messages
 - **GIMP 3.x Batch Mode**: GEGL buffer leak warnings are cosmetic and filtered from output
-- **Linux Headless Operation**: Xvfb automatically used for Flatpak GIMP to enable headless batch processing
-- **GIMP Version Detection**: Automatically detects and adapts to GIMP 2.x or 3.x APIs
+- **Linux Headless Operation**: All GIMP commands use `env -u DISPLAY`, `xvfb-run`, and `--no-interface` flag on Linux (both Flatpak and native) to guarantee no GUI windows; Xvfb is required
+- **GIMP Version Requirement**: Requires GIMP 3.x; GIMP 2.x is not supported
 
 ## Common Workflows
 

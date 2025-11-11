@@ -137,7 +137,7 @@ Multiple Output PNGs (or one consolidated PNG)
 
 **GimpProcessor** (`lib/ruby_spriter/gimp_processor.rb`)
 - GIMP batch scripting and execution
-- Generates Python-fu scripts for GIMP 3.x and 2.10
+- Generates Python-fu scripts for GIMP 3.x (GIMP 2.x NOT supported)
 - Handles image scaling with 5 interpolation methods
 - Background removal with fuzzy and global color select
 - Platform-specific execution (Windows batch files, Unix shell, Linux Flatpak)
@@ -180,8 +180,9 @@ Multiple Output PNGs (or one consolidated PNG)
 
 **Platform** (`lib/ruby_spriter/platform.rb`)
 - Cross-platform detection (Windows, Linux, macOS)
-- GIMP version detection (2.x or 3.x)
-- Flatpak GIMP detection for Linux
+- GIMP 3.x detection and validation (2.x NOT supported)
+- Flatpak GIMP detection for older Linux distributions
+- Native GIMP 3.x support on Ubuntu 25.04+
 - Platform-specific path handling
 
 **Utilities** (`lib/ruby_spriter/utils/`)
@@ -272,7 +273,7 @@ Output:
 
 - **Language**: Ruby 2.7+
 - **Video**: FFmpeg + FFprobe
-- **Image Processing**: ImageMagick 7.x, GIMP 2.10/3.x
+- **Image Processing**: ImageMagick 7.x, GIMP 3.x (2.x NOT supported)
 - **Testing**: RSpec (512+ tests)
 - **Process Management**: Open3 (Ruby stdlib)
 - **File I/O**: Ruby stdlib only (no runtime dependencies)

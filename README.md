@@ -150,8 +150,8 @@ ruby_spriter --batch --dir "animations/" \
 - **Threshold Stepping** - Process with multiple thresholds for superior edges (v0.7.0+)
 - **Ghost Edge Prevention** - Multi-pass cleanup of semi-transparent artifacts (v0.7.0+)
 - **Smoke Detection** - Identify and remove transparency gradients (v0.7.0+)
-- **Frame Extraction** - Extract specific frames by number (v0.6.8+)
-- **Metadata Addition** - Add grid information to external spritesheets (v0.6.8+)
+- **Frame Extraction** - Extract specific frames by number (v0.7.0+)
+- **Metadata Addition** - Add grid information to external spritesheets (v0.7.0+)
 - **Cell-Based Cleanup** - Post-process residual backgrounds per-cell (v0.7.0.1+, experimental)
 
 ---

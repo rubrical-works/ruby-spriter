@@ -9,7 +9,7 @@
 | **FFmpeg** | Latest | Video frame extraction |
 | **FFprobe** | Latest | Video analysis (included with FFmpeg) |
 | **ImageMagick** | 7.x+ | Metadata and sharpening |
-| **GIMP** | 3.x (or 2.10) | Scaling and background removal |
+| **GIMP** | **3.x only** | Scaling and background removal (GIMP 2.x NOT supported) |
 | **Xvfb** | Latest (Linux only) | Virtual display for headless GIMP |
 
 ### Ruby Version
@@ -32,7 +32,7 @@ Ruby Spriter requires these external tools for video and image processing:
 |------|---------|---------|
 | **FFmpeg** | Video frame extraction | Any recent version |
 | **ImageMagick** | Image manipulation & metadata | 7.x or 6.9+ |
-| **GIMP** | Advanced image processing | 3.x (or 2.10) |
+| **GIMP** | Advanced image processing | **3.x only** (2.x NOT supported) |
 | **Xvfb** | Virtual display (Linux only) | Any recent version |
 
 ### Installing Prerequisites
@@ -97,6 +97,18 @@ brew install ffmpeg imagemagick gimp
 
 #### Linux (Ubuntu/Debian)
 
+**Ubuntu 25.04+ (Native GIMP 3.x)**
+
+```bash
+# Install Ruby (if not already installed)
+sudo apt update && sudo apt install ruby-full -y
+
+# Install all dependencies including native GIMP 3.x
+sudo apt install ffmpeg imagemagick gimp xvfb -y
+```
+
+**Ubuntu 24.10 and earlier (Flatpak GIMP 3.x)**
+
 ```bash
 # Install Ruby (if not already installed)
 sudo apt update && sudo apt install ruby-full -y
@@ -104,7 +116,7 @@ sudo apt update && sudo apt install ruby-full -y
 # Install Ruby Spriter dependencies
 sudo apt install ffmpeg imagemagick -y
 
-# Install GIMP 3.x via Flatpak (recommended)
+# Install GIMP 3.x via Flatpak
 sudo apt install flatpak -y
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install flathub org.gimp.GIMP -y
@@ -113,7 +125,13 @@ flatpak install flathub org.gimp.GIMP -y
 sudo apt install xvfb -y
 ```
 
-**Note for Linux Users**: GIMP 3.x requires a display connection. Ruby Spriter automatically uses Xvfb (X Virtual Framebuffer) with Flatpak socket isolation to provide a completely headless virtual display. No GIMP GUI windows will appear on your screen - perfect for both desktop use (no distractions) and server environments (CI/CD, Docker, SSH sessions).
+**Note for Linux Users**:
+- **Xvfb is REQUIRED**: Ruby Spriter uses `xvfb-run` to wrap all GIMP commands, providing a virtual display that prevents GUI windows from appearing
+- **Ubuntu 25.04+**: GIMP 3.x is available in the native package repository
+- **Older distributions**: Use Flatpak to install GIMP 3.x
+- **GIMP 2.x is NOT supported** - ensure you have GIMP 3.x installed
+- **Truly headless operation**: GIMP runs with `--no-interface` and unset `DISPLAY` environment variable - guaranteed no GUI windows or dialogs during processing
+- **Perfect for**: Desktop use (no distractions), server environments (CI/CD, Docker, SSH sessions), and automated workflows
 
 #### Linux (Fedora/RHEL)
 

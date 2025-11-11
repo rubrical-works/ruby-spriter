@@ -186,9 +186,9 @@ ruby_spriter --video input.mp4 --scale 50 --sharpen --debug
 
 ---
 
-## Headless Linux Operation (v0.6.7.1+)
+## Headless Linux Operation (v0.7.0+)
 
-Ruby Spriter provides completely headless GIMP operation on Linux via Xvfb and Flatpak socket isolation:
+Ruby Spriter provides completely headless GIMP operation on Linux with multiple layers of GUI prevention:
 
 ```bash
 # No GIMP GUI appears during processing
@@ -199,9 +199,13 @@ ruby_spriter --batch --dir "sprites/" --remove-bg --max-compress
 ```
 
 **How it Works:**
-- Automatically detects GIMP 3.x Flatpak installation
-- Uses Xvfb (X Virtual Framebuffer) to provide virtual display
-- Flatpak socket isolation (`--nosocket=x11 --nosocket=wayland`) prevents GUI from appearing
+- **Multiple GUI Prevention Layers**:
+  1. `env -u DISPLAY` - Unsets display environment variable
+  2. `xvfb-run` - Provides virtual display buffer
+  3. `--no-interface` - Disables GIMP GUI interface
+  4. `--console-messages` - Routes messages to console instead of dialogs
+  5. Flatpak socket isolation (`--nosocket=x11 --nosocket=wayland`) for Flatpak installations
+- Works with both native GIMP (Ubuntu 25.04+) and Flatpak GIMP (older distributions)
 - No configuration required - works automatically
 
 **Use Cases:**
@@ -211,7 +215,7 @@ ruby_spriter --batch --dir "sprites/" --remove-bg --max-compress
 - **SSH**: Process sprites remotely without X forwarding
 
 **Requirements:**
-- GIMP 3.x via Flatpak (`flatpak install flathub org.gimp.GIMP`)
+- GIMP 3.x (native package on Ubuntu 25.04+, or Flatpak on older distributions)
 - Xvfb (`sudo apt install xvfb` on Ubuntu/Debian)
 
 ---
