@@ -123,7 +123,8 @@ module RubySpriter
 
     def analyze_cell_colors(cell_image_path)
       # Extract histogram using ImageMagick
-      cmd = "magick #{Utils::PathHelper.quote_path(cell_image_path)} -define histogram:unique-colors=true -format %c histogram:info:-"
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(cell_image_path)} -define histogram:unique-colors=true -format %c histogram:info:-"
       histogram_output = execute_command(cmd)
 
       # Parse histogram into color => pixel_count hash
@@ -162,9 +163,10 @@ module RubySpriter
       y_offset = row * cell_height
       cell_path = File.join(temp_dir, "cell_#{row}_#{col}.png")
 
-      # Use ImageMagick crop: magick spritesheet.png -crop WxH+X+Y +repage cell.png
+      # Use ImageMagick crop: convert spritesheet.png -crop WxH+X+Y +repage cell.png
+      convert_cmd = Platform.imagemagick_convert_cmd
       cmd = [
-        'magick',
+        convert_cmd,
         Utils::PathHelper.quote_path(spritesheet_path),
         '-crop', "#{cell_width}x#{cell_height}+#{x_offset}+#{y_offset}",
         '+repage',

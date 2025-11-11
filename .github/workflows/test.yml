@@ -31,6 +31,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
+          # Verify magick command is available
+          which magick || echo "magick not found in PATH"
 
       - name: Install ImageMagick (macOS)
         if: runner.os == 'macOS'

@@ -72,7 +72,8 @@ module RubySpriter
     private
 
     def load_image_dimensions
-      cmd = "magick identify -format \"%w %h\" #{Utils::PathHelper.quote_path(@image_path)}"
+      identify_cmd = Platform.imagemagick_identify_cmd
+      cmd = "#{identify_cmd} -format \"%w %h\" #{Utils::PathHelper.quote_path(@image_path)}"
       stdout, stderr, status = Open3.capture3(cmd)
 
       unless status.success?
@@ -85,7 +86,8 @@ module RubySpriter
     def load_pixel_cache
       return if @pixel_cache
 
-      cmd = "magick #{Utils::PathHelper.quote_path(@image_path)} txt:-"
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(@image_path)} txt:-"
       stdout, stderr, status = Open3.capture3(cmd)
 
       unless status.success?
@@ -113,7 +115,8 @@ module RubySpriter
       # Fallback to direct ImageMagick call if cache not loaded (for testing)
       return @pixel_cache[[x, y]] if @pixel_cache
 
-      cmd = "magick #{Utils::PathHelper.quote_path(@image_path)} -format \"%[pixel:p{#{x},#{y}}]\" info:"
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(@image_path)} -format \"%[pixel:p{#{x},#{y}}]\" info:"
       stdout, stderr, status = Open3.capture3(cmd)
 
       return nil unless status.success?
