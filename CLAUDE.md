@@ -14,7 +14,7 @@ Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from vi
 The tool orchestrates several external command-line tools:
 - **FFmpeg/FFprobe**: Video frame extraction and analysis
 - **ImageMagick**: Metadata management, consolidation, and sharpening
-- **GIMP 3.x (or 2.10)**: Image processing (scaling with interpolation, background removal)
+- **GIMP 3.x**: Image processing (scaling with interpolation, background removal) - **GIMP 2.x is NOT supported**
 - **Xvfb** (Linux only): Virtual display for headless GIMP operation
 
 All external dependencies are checked at runtime via `DependencyChecker` (lib/ruby_spriter/dependency_checker.rb).
@@ -115,7 +115,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 
 **GimpProcessor** (lib/ruby_spriter/gimp_processor.rb)
 - Generates Python-fu scripts for GIMP 3.x batch processing
-- Supports both GIMP 2.x and 3.x APIs (version-aware)
+- **Requires GIMP 3.x** (GIMP 2.x is not supported)
 - Supports 5 interpolation methods: none, linear, cubic, nohalo (default), lohalo
 - Automatically optimizes operation order (remove background before scale) when both operations requested
 - Applies sharpening via ImageMagick after GIMP operations (not GIMP GEGL due to batch mode limitations)
@@ -188,8 +188,9 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 **Platform** (lib/ruby_spriter/platform.rb)
 - Detects OS (Windows, Linux, macOS)
 - Provides platform-specific paths (GIMP executable, ImageMagick commands)
-- Detects GIMP version (2.x or 3.x) from executable or Flatpak
-- Supports Flatpak GIMP installation (`flatpak:org.gimp.GIMP`)
+- Detects and validates GIMP 3.x installation
+- Supports Flatpak GIMP installation (`flatpak:org.gimp.GIMP`) on older Linux distributions
+- Native GIMP 3.x package support on Ubuntu 25.04+
 - Abstracts platform differences
 
 ### Utilities
@@ -295,8 +296,8 @@ Tests use RSpec and follow the pattern:
 - **Path Handling**: All paths are quoted appropriately for shell commands via `PathHelper.quote_path`
 - **Error Handling**: Custom exceptions (DependencyError, ProcessingError, ValidationError) for clear error messages
 - **GIMP 3.x Batch Mode**: GEGL buffer leak warnings are cosmetic and filtered from output
-- **Linux Headless Operation**: Xvfb automatically used for Flatpak GIMP to enable headless batch processing
-- **GIMP Version Detection**: Automatically detects and adapts to GIMP 2.x or 3.x APIs
+- **Linux Headless Operation**: Xvfb automatically used for Flatpak GIMP (older distros) to enable headless batch processing; native GIMP 3.x on Ubuntu 25.04+ also supported
+- **GIMP Version Requirement**: Requires GIMP 3.x; GIMP 2.x is not supported
 
 ## Common Workflows
 
