@@ -9,7 +9,7 @@ RSpec.describe RubySpriter::GhostEdgeCleaner do
            ghost_threshold: 30)
   end
 
-  let(:input_image) { 'spec/fixtures/test_sprite.png' }
+  let(:input_image) { 'spec/fixtures/transparent_bg_sprite.png' }
   let(:output_image) { 'spec/tmp/ghost_cleaned.png' }
 
   before do
