@@ -822,18 +822,18 @@ module RubySpriter
           # Use --nosocket options to prevent Flatpak from accessing host display
           flatpak_app = gimp_path.sub('flatpak:', '')
           if use_xvfb
-            cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+            cmd = "env -u DISPLAY xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-interface --console-messages --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
           else
-            cmd = "flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+            cmd = "flatpak run --nosocket=x11 --nosocket=wayland #{flatpak_app} --no-interface --console-messages --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
           end
         else
           # Native GIMP 3.x installation
           if use_xvfb
-            # On Linux, wrap with xvfb-run to prevent GUI windows
-            cmd = "xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' #{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+            # On Linux, unset DISPLAY and wrap with xvfb-run to prevent GUI windows
+            cmd = "env -u DISPLAY xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' #{Utils::PathHelper.quote_path(gimp_path)} --no-interface --console-messages --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
           else
             # On macOS, run GIMP directly
-            cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
+            cmd = "#{Utils::PathHelper.quote_path(gimp_path)} --no-interface --console-messages --no-splash --quit --batch-interpreter=python-fu-eval -b \"exec(open(r'#{script_file}').read())\" > #{Utils::PathHelper.quote_path(log_file)} 2>&1"
           end
         end
       end
