@@ -31,7 +31,8 @@
       "Bash(Select-String -Pattern \"Failures:\" -Context 50,0)",
       "Bash(E:/Projects/ruby-spriter/spec/ruby_spriter/processor_spec_temp.rb)",
       "Bash(Select-String -Pattern \"^end$\" \"E:\\Projects\\ruby-spriter\\spec\\ruby_spriter\\processor_spec.rb\")",
-      "Bash(Select-Object -Last 5)"
+      "Bash(Select-Object -Last 5)",
+      "Bash(bundle exec ruby:*)"
     ],
     "deny": [],
     "ask": []
