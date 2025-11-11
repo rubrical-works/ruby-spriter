@@ -76,7 +76,7 @@
     --max-compress            Apply maximum PNG compression (preserves metadata)
 ```
 
-### Frame Extraction Options (v0.6.8+)
+### Frame Extraction Options (v0.7.0+)
 
 ```bash
     --extract FRAMES          Extract specific frames by number (e.g., 1,2,4,5,8)
@@ -86,7 +86,7 @@
     --override-md             Override embedded metadata when using --split
 ```
 
-### Metadata Management Options (v0.6.8+)
+### Metadata Management Options (v0.7.0+)
 
 ```bash
     --add-meta R:C            Add spritesheet metadata (rows:columns, e.g., 4:4)
@@ -183,7 +183,7 @@ ruby_spriter --consolidate --dir "spritesheets/"
 ruby_spriter --consolidate --dir "spritesheets/" --max-compress
 ```
 
-### Frame Extraction (v0.6.8+)
+### Frame Extraction (v0.7.0+)
 
 ```bash
 # Extract specific frames by number
@@ -201,7 +201,7 @@ ruby_spriter --image external.png --add-meta 4:4
 ruby_spriter --image external.png --extract 1,5,9,13 --columns 2
 ```
 
-### Metadata Management (v0.6.8+)
+### Metadata Management (v0.7.0+)
 
 ```bash
 # Add metadata to external spritesheet

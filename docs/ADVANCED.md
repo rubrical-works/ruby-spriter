@@ -186,7 +186,7 @@ ruby_spriter --video input.mp4 --scale 50 --sharpen --debug
 
 ---
 
-## Headless Linux Operation (v0.6.7.1+)
+## Headless Linux Operation (v0.7.0+)
 
 Ruby Spriter provides completely headless GIMP operation on Linux via Xvfb and Flatpak socket isolation:
 

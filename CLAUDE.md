@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ruby Spriter is a cross-platform Ruby CLI tool for creating spritesheets from video files and processing them with GIMP. It's designed for game development workflows, particularly with Godot Engine.
 
-**Current Version**: 0.6.7.1
+**Current Version**: 0.7.0.1
 **Ruby Version**: 2.7.0+
 
 ## External Dependencies
@@ -86,8 +86,8 @@ Ruby Spriter operates in seven distinct modes, orchestrated by `Processor`:
 
 1. **Video Mode** (`--video`): Convert MP4 to spritesheet using `VideoProcessor`
 2. **Image Mode** (`--image`): Process existing PNG with GIMP using `GimpProcessor`
-   - **Extract Sub-mode** (`--extract`): Extract specific frames and create new spritesheet (v0.6.8+)
-   - **Add Metadata Sub-mode** (`--add-meta`): Add metadata to external spritesheets (v0.6.8+)
+   - **Extract Sub-mode** (`--extract`): Extract specific frames and create new spritesheet (v0.7.0+)
+   - **Add Metadata Sub-mode** (`--add-meta`): Add metadata to external spritesheets (v0.7.0+)
 3. **Consolidate Mode** (`--consolidate`): Stack multiple spritesheets using `Consolidator`
 4. **Batch Mode** (`--batch`): Process multiple MP4 files in a directory using `BatchProcessor`
 5. **Verify Mode** (`--verify`): Read and display embedded metadata
@@ -152,7 +152,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Provides compression statistics (original size, compressed size, reduction percentage)
 - Works with all processing modes: --video, --image, --batch, --consolidate
 
-**Frame Extraction Workflow** (`--extract`, v0.6.8+)
+**Frame Extraction Workflow** (`--extract`, v0.7.0+)
 - Extracts specific frames by number from a spritesheet
 - Uses `SpritesheetSplitter` to extract all frames to temp directory
 - Keeps only requested frames, deletes the rest
@@ -167,7 +167,7 @@ The `Processor` class (lib/ruby_spriter/processor.rb) orchestrates the workflow:
 - Implemented in `Processor#execute_extract_workflow` and `Processor#reassemble_frames`
 - Mutual exclusivity with `--split` (validated in CLI)
 
-**Metadata Addition Workflow** (`--add-meta`, v0.6.8+)
+**Metadata Addition Workflow** (`--add-meta`, v0.7.0+)
 - Adds spritesheet metadata to external images without embedded metadata
 - Validates image dimensions divide evenly by specified grid
 - Supports partial grids (custom frame count with `--frames`)
