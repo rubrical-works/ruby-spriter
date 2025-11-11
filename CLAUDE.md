@@ -296,7 +296,7 @@ Tests use RSpec and follow the pattern:
 - **Path Handling**: All paths are quoted appropriately for shell commands via `PathHelper.quote_path`
 - **Error Handling**: Custom exceptions (DependencyError, ProcessingError, ValidationError) for clear error messages
 - **GIMP 3.x Batch Mode**: GEGL buffer leak warnings are cosmetic and filtered from output
-- **Linux Headless Operation**: All GIMP commands wrapped with `xvfb-run` on Linux (both Flatpak and native installations) to prevent GUI windows; Xvfb is required on Linux
+- **Linux Headless Operation**: All GIMP commands use `env -u DISPLAY`, `xvfb-run`, and `--no-interface` flag on Linux (both Flatpak and native) to guarantee no GUI windows; Xvfb is required
 - **GIMP Version Requirement**: Requires GIMP 3.x; GIMP 2.x is not supported
 
 ## Common Workflows

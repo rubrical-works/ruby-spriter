@@ -130,7 +130,8 @@ sudo apt install xvfb -y
 - **Ubuntu 25.04+**: GIMP 3.x is available in the native package repository
 - **Older distributions**: Use Flatpak to install GIMP 3.x
 - **GIMP 2.x is NOT supported** - ensure you have GIMP 3.x installed
-- **Headless operation**: No GIMP GUI windows will appear during processing - perfect for both desktop use (no distractions) and server environments (CI/CD, Docker, SSH sessions)
+- **Truly headless operation**: GIMP runs with `--no-interface` and unset `DISPLAY` environment variable - guaranteed no GUI windows or dialogs during processing
+- **Perfect for**: Desktop use (no distractions), server environments (CI/CD, Docker, SSH sessions), and automated workflows
 
 #### Linux (Fedora/RHEL)
 
