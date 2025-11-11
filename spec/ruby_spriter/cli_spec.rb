@@ -1955,6 +1955,9 @@ end
         end
 
         it 'accepts --by-frame with --batch and --remove-bg' do
+          # Mock dependencies to avoid DependencyError
+          allow(RubySpriter::DependencyChecker).to receive(:all_satisfied?).and_return(true)
+
           # Mock the entire BatchProcessor to prevent directory validation
           mock_batch_processor = instance_double(RubySpriter::BatchProcessor)
           allow(RubySpriter::BatchProcessor).to receive(:new).and_return(mock_batch_processor)
