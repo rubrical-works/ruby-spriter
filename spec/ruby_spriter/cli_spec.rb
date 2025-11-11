@@ -764,6 +764,21 @@ RSpec.describe RubySpriter::CLI do
         expect(interpolation_line_idx).to be > scale_line_idx
         expect(interpolation_line_idx).to be < sharpen_line_idx
       end
+it 'includes --by-frame flag in video mode help' do
+  output = StringIO.new
+  $stdout = output
+
+  begin
+    described_class.start(['--video', '--help'])
+  rescue SystemExit
+    # Expected
+  ensure
+    $stdout = STDOUT
+  end
+
+  expect(output.string).to include('--by-frame')
+  expect(output.string).to include('Remove background from each frame individually')
+end
 
       it 'shows image mode help with --help' do
         output = StringIO.new
@@ -809,6 +824,21 @@ RSpec.describe RubySpriter::CLI do
 
         expect(output.string).to include('Batch Mode')
       end
+it 'includes --by-frame flag in batch mode help' do
+  output = StringIO.new
+  $stdout = output
+
+  begin
+    described_class.start(['--batch', '--help'])
+  rescue SystemExit
+    # Expected
+  ensure
+    $stdout = STDOUT
+  end
+
+  expect(output.string).to include('--by-frame')
+  expect(output.string).to include('Remove background from each frame individually')
+end
 
       it 'shows split mode help with --help' do
         output = StringIO.new
@@ -1886,6 +1916,110 @@ RSpec.describe RubySpriter::CLI do
         end
 
         described_class.start(['--image', 'test.png', '--add-meta', '4:4', '--frames', '14'])
+      end
+    end
+
+    describe '--by-frame flag validation' do
+      context 'when --by-frame is used without --video or --batch' do
+        it 'raises ValidationError when used with --image' do
+          expect {
+            described_class.start(['--image', 'sprite.png', '--remove-bg', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --video or --batch/)
+        end
+
+        it 'raises ValidationError when used alone with --remove-bg' do
+          expect {
+            described_class.start(['--remove-bg', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --video or --batch/)
+        end
+      end
+
+      context 'when --by-frame is used without --remove-bg' do
+        it 'raises ValidationError' do
+          expect {
+            described_class.start(['--video', 'input.mp4', '--by-frame'])
+          }.to raise_error(RubySpriter::ValidationError, /--by-frame requires --remove-bg/)
+        end
+      end
+
+      context 'when --by-frame is used correctly' do
+        it 'accepts --by-frame with --video and --remove-bg' do
+          # Mock the entire Processor to prevent file validation
+          mock_processor = instance_double(RubySpriter::Processor)
+          allow(RubySpriter::Processor).to receive(:new).and_return(mock_processor)
+          allow(mock_processor).to receive(:run)
+
+          expect {
+            described_class.start(['--video', 'input.mp4', '--remove-bg', '--by-frame'])
+          }.not_to raise_error
+        end
+
+        it 'accepts --by-frame with --batch and --remove-bg' do
+          # Mock the entire Processor to prevent dependency checking
+          mock_processor = instance_double(RubySpriter::Processor)
+          allow(RubySpriter::Processor).to receive(:new).and_return(mock_processor)
+          allow(mock_processor).to receive(:run)
+
+          expect {
+            described_class.start(['--batch', '--dir', 'videos/', '--remove-bg', '--by-frame'])
+          }.not_to raise_error
+        end
+      end
+    end
+
+    describe '--cleanup-cells flag validation' do
+      it 'requires --remove-bg flag' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--cleanup-cells'])
+        end.to raise_error(RubySpriter::ValidationError, /requires --remove-bg/)
+      end
+
+      it 'cannot be used with --by-frame' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--by-frame', '--cleanup-cells'])
+        end.to raise_error(RubySpriter::ValidationError, /cannot be used with --by-frame/)
+      end
+
+      it 'requires video or batch mode' do
+        # Create a temporary image file for testing
+        temp_dir = Dir.mktmpdir
+        temp_file = File.join(temp_dir, 'test.png')
+        FileUtils.touch(temp_file)
+
+        begin
+          expect do
+            described_class.start(['--image', temp_file, '--remove-bg', '--cleanup-cells'])
+          end.to raise_error(RubySpriter::ValidationError, /requires --video or --batch/)
+        ensure
+          FileUtils.rm_rf(temp_dir)
+        end
+      end
+
+      it 'validates cell-cleanup-threshold range (too low)' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '0.5'])
+        end.to raise_error(RubySpriter::ValidationError, /between 1.0 and 50.0/)
+      end
+
+      it 'validates cell-cleanup-threshold range (too high)' do
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '55.0'])
+        end.to raise_error(RubySpriter::ValidationError, /between 1.0 and 50.0/)
+      end
+
+      it 'accepts valid configuration' do
+        processor_double = instance_double(RubySpriter::Processor)
+        allow(processor_double).to receive(:run)
+
+        allow(RubySpriter::Processor).to receive(:new) do |options|
+          expect(options[:cleanup_cells]).to be true
+          expect(options[:cell_cleanup_threshold]).to eq(20.0)
+          processor_double
+        end
+
+        expect do
+          described_class.start(['--video', 'test.mp4', '--remove-bg', '--cleanup-cells', '--cell-cleanup-threshold', '20.0'])
+        end.not_to raise_error
       end
     end
   end

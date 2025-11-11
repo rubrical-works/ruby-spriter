@@ -53,7 +53,8 @@ module RubySpriter
       # Alpha values are 0-255, threshold is 0-255
       threshold_fraction = threshold / 255.0
 
-      cmd = "magick #{Utils::PathHelper.quote_path(@input_image)} " \
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(@input_image)} " \
             "-channel A " \
             "-separate " \
             "-threshold #{(threshold_fraction * 100).to_i}% " \
@@ -80,7 +81,8 @@ module RubySpriter
       # Use direct -fx operation on alpha channel with explicit RGB preservation
       # Use png:color-type=6 to force RGBA output (handles grayscale inputs)
       # Use 'u' to refer to current channel value in -channel context
-      cmd = "magick #{Utils::PathHelper.quote_path(@output_image)} " \
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(@output_image)} " \
             "-define png:color-type=6 " \
             "-alpha set " \
             "-channel A " \
@@ -142,7 +144,8 @@ module RubySpriter
       threshold = @config.ghost_threshold
       threshold_fraction = threshold / 255.0
 
-      cmd = "magick #{Utils::PathHelper.quote_path(file_path)} " \
+      convert_cmd = Platform.imagemagick_convert_cmd
+      cmd = "#{convert_cmd} #{Utils::PathHelper.quote_path(file_path)} " \
             "-channel A " \
             "-separate " \
             "-threshold #{(threshold_fraction * 100).to_i}% " \

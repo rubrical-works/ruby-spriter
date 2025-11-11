@@ -8,6 +8,9 @@ module RubySpriter
   class GimpProcessor
     attr_reader :options, :gimp_path, :gimp_version
 
+    # Default background color tolerance for selection operations (0-100 scale)
+    DEFAULT_BG_THRESHOLD = 15.0
+
     def initialize(gimp_path, options = {})
       @gimp_path = gimp_path
       @options = options
@@ -47,6 +50,48 @@ module RubySpriter
       end
 
       working_file
+    end
+
+    # Execute a Python script with GIMP (used by ThresholdStepper)
+    # @param script [String] The Python script content
+    # @param output_file [String] Expected output file path
+    # @return [Boolean] True if successful, false otherwise
+    def execute_python_script(script, output_file)
+      script_file = File.join(Dir.tmpdir, "gimp_threshold_#{Time.now.to_i}_#{rand(10_000)}.py")
+      log_file = File.join(Dir.tmpdir, "gimp_threshold_log_#{Time.now.to_i}_#{rand(10_000)}.txt")
+
+      begin
+        File.write(script_file, script)
+
+        if options[:debug]
+          Utils::OutputFormatter.indent("DEBUG: Threshold script: #{script_file}")
+          Utils::OutputFormatter.indent("DEBUG: Expected output: #{output_file}")
+        end
+
+        # Execute using existing platform-specific methods
+        if Platform.windows?
+          execute_gimp_windows(script_file, log_file)
+        else
+          execute_gimp_unix(script_file, log_file)
+        end
+
+        # Check if output was created
+        if File.exist?(output_file) && File.size(output_file).positive?
+          true
+        else
+          if options[:debug]
+            Utils::OutputFormatter.indent("WARNING: Threshold script did not produce output")
+          end
+          false
+        end
+      rescue StandardError => e
+        if options[:debug]
+          Utils::OutputFormatter.indent("ERROR in threshold script: #{e.message}")
+        end
+        false
+      ensure
+        cleanup_temp_files(script_file, log_file) unless options[:keep_temp]
+      end
     end
 
     private
@@ -109,7 +154,22 @@ module RubySpriter
 
       Utils::OutputFormatter.indent("Removing background (#{method} select)...")
 
-      script = generate_remove_bg_script(input_file, output_file)
+      # Collect background colors for --no-fuzzy mode (default)
+      background_colors = nil
+      if options[:remove_bg] && !options[:fuzzy_select]
+        Utils::OutputFormatter.indent("Sampling background colors for global selection...")
+
+        sample_offset = options[:bg_sample_offset] || 5
+        sample_count = options[:bg_sample_count] || 10
+        max_rows = 20
+
+        sampler = BackgroundSampler.new(input_file, sample_offset, sample_count, max_rows)
+        background_colors = sampler.collect_unique_colors
+
+        Utils::OutputFormatter.indent("  Collected #{background_colors.length} unique background colors")
+      end
+
+      script = generate_remove_bg_script(input_file, output_file, background_colors)
       execute_gimp_script(script, output_file, "Background Removal")
 
       # Preserve metadata from input file
@@ -302,15 +362,15 @@ module RubySpriter
       PYTHON
     end
 
-    def generate_remove_bg_script(input_file, output_file)
+    def generate_remove_bg_script(input_file, output_file, background_colors = nil)
       if gimp2?
-        generate_remove_bg_script_gimp2(input_file, output_file)
+        generate_remove_bg_script_gimp2(input_file, output_file, background_colors)
       else
-        generate_remove_bg_script_gimp3(input_file, output_file)
+        generate_remove_bg_script_gimp3(input_file, output_file, background_colors)
       end
     end
 
-    def generate_remove_bg_script_gimp3(input_file, output_file)
+    def generate_remove_bg_script_gimp3(input_file, output_file, background_colors = nil)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
 
@@ -321,6 +381,11 @@ module RubySpriter
         generate_fuzzy_select_code
       else
         generate_global_select_code
+      end
+
+      # If background colors provided, use global select for inner backgrounds
+      if background_colors && !background_colors.empty?
+        selection_code << "\n" << generate_global_select_with_colors(background_colors)
       end
 
       # Build optional processing code
@@ -354,16 +419,10 @@ module RubySpriter
                 print("Added alpha channel")
             
             pdb = Gimp.get_pdb()
-            
-            # Sample all four corners
-            corners = [
-                (0, 0),           # Top-left
-                (w-1, 0),         # Top-right
-                (0, h-1),         # Bottom-left
-                (w-1, h-1)        # Bottom-right
-            ]
-            
-            print(f"Sampling {len(corners)} corners...")
+
+            # Sample from single interior point to avoid edge artifacts
+            x = 5
+            y = 5
             
         #{selection_code.split("\n").map { |line| "    " + line }.join("\n")}
             
@@ -422,13 +481,13 @@ module RubySpriter
       PYTHON
     end
 
-    def generate_remove_bg_script_gimp2(input_file, output_file)
+    def generate_remove_bg_script_gimp2(input_file, output_file, background_colors = nil)
       input_path = Utils::PathHelper.normalize_for_python(input_file)
       output_path = Utils::PathHelper.normalize_for_python(output_file)
 
       use_fuzzy = options[:fuzzy_select]
       grow = options[:grow_selection] || 1
-      feather = options[:bg_threshold] || 0.0
+      feather = options[:feather_radius] || 0.0
 
       # Build selection method
       if use_fuzzy
@@ -515,51 +574,103 @@ module RubySpriter
     end
 
     def generate_fuzzy_select_code
+      # Use nil-coalescing to ensure default is applied when option is nil
+      threshold = options[:bg_threshold].nil? ? DEFAULT_BG_THRESHOLD : options[:bg_threshold]
+
       <<~PYTHON.chomp
         # Fuzzy select (contiguous regions only)
         print("Using FUZZY SELECT (contiguous regions only)")
+        print(f"Threshold: #{threshold}")
+
+        # Set ALL context settings to match GUI defaults EXACTLY
+        Gimp.context_set_antialias(True)
+        Gimp.context_set_feather(False)
+        Gimp.context_set_sample_merged(False)
+        Gimp.context_set_sample_criterion(Gimp.SelectCriterion.COMPOSITE)
+        Gimp.context_set_sample_threshold_int(int(#{threshold}))
+        Gimp.context_set_sample_transparent(True)
+        Gimp.context_set_diagonal_neighbors(False)
+
         select_proc = pdb.lookup_procedure('gimp-image-select-contiguous-color')
-        
+
         if not select_proc:
             raise Exception("Could not find gimp-image-select-contiguous-color procedure")
-        
-        for i, (x, y) in enumerate(corners):
-            print(f"  Corner {i+1} at ({x}, {y})")
-            
-            config = select_proc.create_config()
-            config.set_property('image', img)
-            config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
-            config.set_property('drawable', layer)
-            config.set_property('x', float(x))
-            config.set_property('y', float(y))
-            select_proc.run(config)
+
+        print(f"Sampling background at ({x}, {y})")
+        config = select_proc.create_config()
+        config.set_property('image', img)
+        config.set_property('operation', Gimp.ChannelOps.REPLACE)
+        config.set_property('drawable', layer)
+        config.set_property('x', float(x))
+        config.set_property('y', float(y))
+        select_proc.run(config)
       PYTHON
     end
 
     def generate_global_select_code
+      # Use nil-coalescing to ensure default is applied when option is nil
+      threshold = options[:bg_threshold].nil? ? DEFAULT_BG_THRESHOLD : options[:bg_threshold]
+
       <<~PYTHON.chomp
         # Global color select (all matching pixels)
         print("Using GLOBAL COLOR SELECT (all matching pixels)")
+        print(f"Threshold: #{threshold}")
+
+        # Set ALL context settings to match GUI defaults EXACTLY
+        Gimp.context_set_antialias(True)
+        Gimp.context_set_feather(False)
+        Gimp.context_set_sample_merged(False)
+        Gimp.context_set_sample_criterion(Gimp.SelectCriterion.COMPOSITE)
+        Gimp.context_set_sample_threshold_int(int(#{threshold}))
+        Gimp.context_set_sample_transparent(True)
+
         select_proc = pdb.lookup_procedure('gimp-image-select-color')
-        
+
         if not select_proc:
             raise Exception("Could not find gimp-image-select-color procedure")
-        
-        for i, (x, y) in enumerate(corners):
-            print(f"  Corner {i+1} at ({x}, {y})")
-            color = layer.get_pixel(x, y)
-            
+
+        print(f"Sampling background at ({x}, {y})")
+        color = layer.get_pixel(x, y)
+        config = select_proc.create_config()
+        config.set_property('image', img)
+        config.set_property('operation', Gimp.ChannelOps.REPLACE)
+        config.set_property('drawable', layer)
+        config.set_property('color', color)
+        select_proc.run(config)
+      PYTHON
+    end
+
+    def generate_global_select_with_colors(background_colors)
+      # Convert Ruby array of hashes to Python list of dicts
+      colors_python = background_colors.map { |c| "{'r': #{c[:r]}, 'g': #{c[:g]}, 'b': #{c[:b]}}" }.join(', ')
+
+      <<~PYTHON.chomp
+        # Global color select for inner backgrounds
+        print("Selecting inner background colors...")
+        select_proc = pdb.lookup_procedure('gimp-image-select-color')
+
+        if not select_proc:
+            raise Exception("Could not find gimp-image-select-color procedure")
+
+        for i, bg_color in enumerate([#{colors_python}]):
+            print(f"  Selecting color {i+1}: RGB({bg_color['r']}, {bg_color['g']}, {bg_color['b']})")
+
+            # Create Gegl.Color
+            color = Gegl.Color.new(f"rgb({bg_color['r']/255.0}, {bg_color['g']/255.0}, {bg_color['b']/255.0})")
+
             config = select_proc.create_config()
             config.set_property('image', img)
-            config.set_property('operation', Gimp.ChannelOps.REPLACE if i == 0 else Gimp.ChannelOps.ADD)
+            config.set_property('operation', Gimp.ChannelOps.ADD)
             config.set_property('drawable', layer)
             config.set_property('color', color)
             select_proc.run(config)
+
+        print("Inner background colors selected")
       PYTHON
     end
 
     def generate_grow_selection_code
-      grow = options[:grow_selection] || 1
+      grow = options[:grow_selection].nil? ? 0 : options[:grow_selection]  # DEFAULT TO 0!
       return "# No selection growth" if grow <= 0
 
       <<~PYTHON.chomp
@@ -576,20 +687,27 @@ module RubySpriter
     end
 
     def generate_feather_selection_code
-      threshold = options[:bg_threshold] || 0.0
-      return "# No feathering" if threshold <= 0
+      feather_radius = options[:feather_radius] || 0.0
 
-      <<~PYTHON.chomp
-        # Feather selection
-        print(f"Feathering selection by #{threshold} pixels...")
-        feather_proc = pdb.lookup_procedure('gimp-selection-feather')
-        if feather_proc:
-            config = feather_proc.create_config()
-            config.set_property('image', img)
-            config.set_property('radius', #{threshold})
-            feather_proc.run(config)
-            print("Selection feathered")
-      PYTHON
+      if feather_radius > 0
+        # Set feathering via context
+        <<~PYTHON.chomp
+          # Feather selection
+          print(f"Feathering selection by #{feather_radius} pixels...")
+          Gimp.context_set_feather(True)
+          Gimp.context_set_feather_radius(#{feather_radius})
+
+          feather_proc = pdb.lookup_procedure('gimp-selection-feather')
+          if feather_proc:
+              config = feather_proc.create_config()
+              config.set_property('image', img)
+              config.set_property('radius', #{feather_radius})
+              feather_proc.run(config)
+              print("Selection feathered")
+        PYTHON
+      else
+        "# No feathering"
+      end
     end
 
     def execute_gimp_script(script_content, expected_output, operation_name)

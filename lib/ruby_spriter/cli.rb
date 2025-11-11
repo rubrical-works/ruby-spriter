@@ -18,6 +18,7 @@ module RubySpriter
 
     def parse_and_run(args)
       options = {}
+      options[:fuzzy_select] = false  # Default to --no-fuzzy (global color select)
 
       # Handle context-sensitive help before validation
       if args.include?('--help') || args.include?('-h')
@@ -43,6 +44,38 @@ module RubySpriter
       # Validate --add-meta cannot be combined with processing options
       if options[:add_meta] && (options[:scale_percent] || options[:remove_bg] || options[:sharpen])
         raise ValidationError, "--add-meta cannot be combined with processing options (--scale, --remove-bg, --sharpen)"
+      end
+
+      # Validate --by-frame flag requirements
+      if options[:by_frame]
+        unless options[:remove_bg]
+          raise ValidationError, "--by-frame requires --remove-bg"
+        end
+
+        unless options[:video] || options[:batch]
+          raise ValidationError, "--by-frame requires --video or --batch"
+        end
+      end
+
+      # Validate --cleanup-cells flag requirements
+      if options[:cleanup_cells]
+        unless options[:remove_bg]
+          raise ValidationError, "--cleanup-cells requires --remove-bg flag"
+        end
+
+        if options[:by_frame]
+          raise ValidationError, "--cleanup-cells cannot be used with --by-frame (redundant)"
+        end
+
+        unless options[:video] || options[:batch]
+          raise ValidationError, "--cleanup-cells requires --video or --batch mode"
+        end
+
+        if options[:cell_cleanup_threshold]
+          unless options[:cell_cleanup_threshold].between?(1.0, 50.0)
+            raise ValidationError, "--cell-cleanup-threshold must be between 1.0 and 50.0"
+          end
+        end
       end
 
       # Run processor
@@ -218,71 +251,46 @@ module RubySpriter
         options[:grow_selection] = g
       end
 
+      opts.on("-f", "--feather PIXELS", Float, "Feather selection edges in pixels (default: 0.0, softer edges)") do |f|
+        options[:feather_radius] = f
+      end
+
       opts.separator ""
     end
 
     def add_bg_removal_options(opts, options)
       opts.separator "Background Removal Method:"
 
-      opts.on("--fuzzy", "Use fuzzy select (contiguous regions) - DEFAULT") do
+      opts.on("--fuzzy", "Use fuzzy select (contiguous regions only)") do
         options[:fuzzy_select] = true
       end
 
-      opts.on("--no-fuzzy", "Use global color select (all matching pixels)") do
+      opts.on("--no-fuzzy", "Use global color select (all matching pixels) - DEFAULT") do
         options[:fuzzy_select] = false
       end
 
+      opts.on('--by-frame', 'Remove background from each frame individually (video/batch mode only)') do
+        options[:by_frame] = true
+      end
+
+      opts.on('--cleanup-cells', 'Apply cell-based background cleanup (requires --remove-bg, cannot use with --by-frame)') do
+        options[:cleanup_cells] = true
+      end
+
+      opts.on('--cell-cleanup-threshold N', Float,
+              'Minimum percentage for dominant color detection (default: 15.0, range: 1.0-50.0)') do |n|
+        options[:cell_cleanup_threshold] = n
+      end
+
       opts.separator ""
-      opts.separator "Inner Background Removal (v0.7.0+):"
+      opts.separator "Background Color Sampling (for --no-fuzzy mode):"
 
-      opts.on("--try-inner", "Enable inner background removal for centered sprites") do
-        options[:try_inner] = true
+      opts.on("--bg-sample-offset N", Integer, "Distance from edge to start sampling background colors (default: 5)") do |n|
+        options[:bg_sample_offset] = n
       end
 
-      opts.on("--inner-min-area N", Integer, "Minimum contiguous area threshold in pixels (default: 100)") do |n|
-        options[:inner_min_area] = n
-      end
-
-      opts.on("--adaptive-min-area", "Calculate area threshold as 1% of image area") do
-        options[:adaptive_min_area] = true
-      end
-
-      opts.on("--multi-pass", "Enable multi-pass alpha cleanup for ghost edge prevention") do
-        options[:multi_pass] = true
-      end
-
-      opts.on("--prevent-ghost-edges", "Alias for --multi-pass") do
-        options[:multi_pass] = true
-      end
-
-      opts.on("--edge-sample-depth N", Integer, "Edge sampling depth in pixels (default: 10)") do |n|
-        options[:edge_sample_depth] = n
-      end
-
-      opts.on("--edge-sample-pattern PATTERN", [:linear, :weighted],
-              "Sampling pattern: linear or weighted (default: linear)") do |pattern|
-        options[:edge_sample_pattern] = pattern.to_s
-      end
-
-      opts.on("--color-space SPACE", [:rgb, :lab],
-              "Color matching space: rgb or lab (default: rgb)") do |space|
-        options[:color_space] = space.to_s
-      end
-
-      opts.on("--threshold-stepping", "Enable threshold stepping (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)") do
-        options[:threshold_stepping] = true
-      end
-
-      opts.on("--remove-smoke", "Detect and remove transparency gradients (smoke effects)") do
-        options[:remove_smoke] = true
-      end
-
-      opts.on("--bg-fuzz N", Float, "Background color tolerance percentage (default: 10)") do |n|
-        options[:bg_fuzz] = n
-      end
-
-      opts.on("--ghost-threshold N", Float, "Ghost edge detection threshold (default: 30)") do |n|
-        options[:ghost_threshold] = n
+      opts.on("--bg-sample-count N", Integer, "Number of unique background colors to collect (default: 10)") do |n|
+        options[:bg_sample_count] = n
       end
 
       opts.separator ""
@@ -370,7 +378,7 @@ module RubySpriter
       opts.separator "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo --sharpen"
       opts.separator "  ruby_spriter --video input.mp4 --max-compress"
       opts.separator "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
-      opts.separator "  ruby_spriter --image sprite.png --remove-bg --fuzzy"
+      opts.separator "  ruby_spriter --image sprite.png --remove-bg"
       opts.separator "  ruby_spriter --batch --dir videos/"
       opts.separator "  ruby_spriter --batch --dir videos/ --outputdir output/"
       opts.separator "  ruby_spriter --batch --dir videos/ --batch-consolidate --max-compress"
@@ -378,14 +386,6 @@ module RubySpriter
       opts.separator "  ruby_spriter --consolidate --dir spritesheets/"
       opts.separator "  ruby_spriter --consolidate --dir spritesheets/ --outputdir output/ --max-compress"
       opts.separator "  ruby_spriter --verify spritesheet.png"
-      opts.separator ""
-      opts.separator "v0.7.0 Inner Background Removal Examples:"
-      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --try-inner"
-      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --threshold-stepping --try-inner"
-      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --try-inner --multi-pass"
-      opts.separator "  ruby_spriter --video input.mp4 --remove-bg --threshold-stepping --try-inner --multi-pass --remove-smoke"
-      opts.separator "  ruby_spriter --image sprite.png --remove-bg --try-inner --inner-min-area 200"
-      opts.separator "  ruby_spriter --image sprite.png --remove-bg --try-inner --ghost-threshold 40 --bg-fuzz 15"
       opts.separator ""
     end
 
@@ -437,29 +437,14 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
-      puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
-      puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
+      puts "    --no-fuzzy                     └─ Use global color select (all matching pixels) - DEFAULT"
+      puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions only)"
+      puts "    --by-frame                     └─ Remove background from each frame individually (slower, better quality)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
       puts "    -g, --grow PIXELS              └─ Grow selection pixels (default: 1)"
       puts ""
       puts "  --order ORDER                    Operation order when using BOTH --scale AND --remove-bg:"
       puts "                                   scale_first or bg_first (default: scale_first)"
-      puts ""
-      puts "v0.7.0 Inner Background Removal (requires --remove-bg):"
-      puts "  --try-inner                      Remove interior background regions"
-      puts "    --inner-min-area N             └─ Minimum area threshold in pixels (default: 100)"
-      puts "    --adaptive-min-area            └─ Use 1% of image area as threshold"
-      puts "    --edge-sample-depth N          └─ Edge sampling depth in pixels (default: 10)"
-      puts "    --edge-sample-pattern PATTERN  └─ Pattern: linear or weighted (default: linear)"
-      puts "    --color-space SPACE            └─ Color space: rgb or lab (default: rgb)"
-      puts "    --bg-fuzz N                    └─ Background tolerance % (default: 10)"
-      puts ""
-      puts "  --threshold-stepping             Multi-threshold processing (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)"
-      puts ""
-      puts "  --multi-pass                     Ghost edge prevention (multi-pass alpha cleanup)"
-      puts "    --ghost-threshold N            └─ Ghost detection threshold 0-255 (default: 30)"
-      puts ""
-      puts "  --remove-smoke                   Detect and remove transparency gradients"
       puts ""
       puts "Output Options:"
       puts "  --max-compress                   Apply maximum PNG compression"
@@ -470,13 +455,8 @@ module RubySpriter
       puts "Examples:"
       puts "  ruby_spriter --video input.mp4"
       puts "  ruby_spriter --video input.mp4 --scale 50 --interpolation nohalo"
-      puts "  ruby_spriter --video input.mp4 --remove-bg --fuzzy --threshold 0.5"
+      puts "  ruby_spriter --video input.mp4 --remove-bg --threshold 0.5"
       puts "  ruby_spriter --video input.mp4 --scale 50 --sharpen --max-compress"
-      puts ""
-      puts "v0.7.0 Inner Background Removal Examples:"
-      puts "  ruby_spriter --video input.mp4 --remove-bg --try-inner"
-      puts "  ruby_spriter --video input.mp4 --remove-bg --threshold-stepping --try-inner --multi-pass"
-      puts "  ruby_spriter --video input.mp4 --remove-bg --try-inner --multi-pass --remove-smoke"
       puts ""
       exit
     end
@@ -504,29 +484,14 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
-      puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions) - DEFAULT"
-      puts "    --no-fuzzy                     └─ Use global color select (all matching pixels)"
+      puts "    --no-fuzzy                     └─ Use global color select (all matching pixels) - DEFAULT"
+      puts "    --fuzzy                        └─ Use fuzzy select (contiguous regions only)"
+      puts "    --by-frame                     └─ Remove background from each frame individually (slower, better quality)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
       puts "    -g, --grow PIXELS              └─ Grow selection pixels (default: 1)"
       puts ""
       puts "  --order ORDER                    Operation order when using BOTH --scale AND --remove-bg:"
       puts "                                   scale_first or bg_first (default: scale_first)"
-      puts ""
-      puts "v0.7.0 Inner Background Removal (requires --remove-bg):"
-      puts "  --try-inner                      Remove interior background regions"
-      puts "    --inner-min-area N             └─ Minimum area threshold in pixels (default: 100)"
-      puts "    --adaptive-min-area            └─ Use 1% of image area as threshold"
-      puts "    --edge-sample-depth N          └─ Edge sampling depth in pixels (default: 10)"
-      puts "    --edge-sample-pattern PATTERN  └─ Pattern: linear or weighted (default: linear)"
-      puts "    --color-space SPACE            └─ Color space: rgb or lab (default: rgb)"
-      puts "    --bg-fuzz N                    └─ Background tolerance % (default: 10)"
-      puts ""
-      puts "  --threshold-stepping             Multi-threshold processing (0.0, 0.5, 1.0, 3.0, 5.0, 10.0)"
-      puts ""
-      puts "  --multi-pass                     Ghost edge prevention (multi-pass alpha cleanup)"
-      puts "    --ghost-threshold N            └─ Ghost detection threshold 0-255 (default: 30)"
-      puts ""
-      puts "  --remove-smoke                   Detect and remove transparency gradients"
       puts ""
       puts "Frame Extraction & Reassembly:"
       puts "  --split R:C                      Split spritesheet into all individual frames (rows:columns)"
@@ -550,20 +515,13 @@ module RubySpriter
       puts ""
       puts "Examples:"
       puts "  ruby_spriter --image sprite.png --scale 50 --interpolation nohalo"
-      puts "  ruby_spriter --image sprite.png --remove-bg --fuzzy --threshold 1.0"
+      puts "  ruby_spriter --image sprite.png --remove-bg --threshold 1.0"
       puts "  ruby_spriter --image sprite.png --scale 50 --sharpen --sharpen-gain 1.5"
       puts "  ruby_spriter --image sprite.png --split 4:4 --override-md"
       puts "  ruby_spriter --image sprite.png --extract 1,2,4,5,8 --columns 3"
       puts "  ruby_spriter --image sprite.png --extract 1,1,2,2,3,3 --save-frames"
       puts "  ruby_spriter --image sprite.png --add-meta 4:4"
       puts "  ruby_spriter --image sprite.png --add-meta 4:4 --frames 14 --output sprite_meta.png"
-      puts ""
-      puts "v0.7.0 Inner Background Removal Examples:"
-      puts "  ruby_spriter --image sprite.png --remove-bg --try-inner"
-      puts "  ruby_spriter --image sprite.png --remove-bg --threshold-stepping --try-inner"
-      puts "  ruby_spriter --image sprite.png --remove-bg --try-inner --multi-pass"
-      puts "  ruby_spriter --image sprite.png --remove-bg --try-inner --inner-min-area 200"
-      puts "  ruby_spriter --image sprite.png --remove-bg --try-inner --ghost-threshold 40 --bg-fuzz 15"
       puts ""
       exit
     end
@@ -641,23 +599,14 @@ module RubySpriter
       puts "    --sharpen-threshold VALUE      └─ Sharpen threshold (default: 0.03)"
       puts ""
       puts "  -r, --remove-bg                  Remove background"
-      puts "    --fuzzy                        └─ Use fuzzy select (DEFAULT)"
-      puts "    --no-fuzzy                     └─ Use global color select"
+      puts "    --no-fuzzy                     └─ Use global color select - DEFAULT"
+      puts "    --fuzzy                        └─ Use fuzzy select (contiguous only)"
+      puts "    --by-frame                     └─ Remove background from each frame individually (slower, better quality)"
       puts "    -t, --threshold VALUE          └─ Feather radius (default: 0.0)"
       puts "    -g, --grow PIXELS              └─ Grow selection (default: 1)"
       puts ""
       puts "  --order ORDER                    Operation order when using BOTH --scale AND --remove-bg:"
       puts "                                   scale_first or bg_first (default: scale_first)"
-      puts ""
-      puts "v0.7.0 Inner Background Removal (applied to all videos, requires --remove-bg):"
-      puts "  --try-inner                      Remove interior background regions"
-      puts "    --inner-min-area N             └─ Minimum area threshold (default: 100)"
-      puts "    --adaptive-min-area            └─ Use 1% of image area as threshold"
-      puts "    --threshold-stepping           └─ Multi-threshold processing"
-      puts "    --multi-pass                   └─ Ghost edge prevention"
-      puts "    --remove-smoke                 └─ Remove transparency gradients"
-      puts "    --bg-fuzz N                    └─ Background tolerance % (default: 10)"
-      puts "    --ghost-threshold N            └─ Ghost detection threshold (default: 30)"
       puts ""
       puts "Output Options:"
       puts "  --max-compress                   Apply maximum PNG compression"
@@ -676,10 +625,6 @@ module RubySpriter
       puts "  ruby_spriter --batch --dir videos/ --outputdir output/"
       puts "  ruby_spriter --batch --dir videos/ --scale 50 --sharpen"
       puts "  ruby_spriter --batch --dir videos/ --batch-consolidate --max-compress"
-      puts ""
-      puts "v0.7.0 Inner Background Removal Examples:"
-      puts "  ruby_spriter --batch --dir videos/ --remove-bg --try-inner"
-      puts "  ruby_spriter --batch --dir videos/ --remove-bg --threshold-stepping --try-inner --multi-pass"
       puts ""
       exit
     end

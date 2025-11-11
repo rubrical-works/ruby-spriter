@@ -1,9 +1,290 @@
-
 ---
 
 ### **CHANGELOG.md**
 ```markdown
-# Changelog
+## [0.7.0.1] - 2025-11-07 to 2025-11-11
+### 🔧 Code Quality & Performance Release (Nov 8-11, 2025)
+
+### 🎨 Cell-Based Background Cleanup (EXPERIMENTAL - Nov 10-11, 2025)
+
+#### Added
+- **Cell-Based Background Cleanup** (`--cleanup-cells`): Post-process residual backgrounds from finished spritesheets
+  - Analyzes each cell independently for dominant background colors exceeding threshold
+  - Uses GIMP to remove detected dominant colors from individual cells
+  - Configurable threshold via `--cell-cleanup-threshold` (default: 15.0%, range: 1.0-50.0)
+  - Requires `--remove-bg` flag (validates usage)
+  - Cannot be combined with `--by-frame` (redundant - by-frame already handles per-frame cleanup)
+  - Works with both `--video` and `--batch` modes
+  - Progress reporting shows cells processed/cleaned/skipped counts
+  - ⚠️ **Experimental**: Feature is technically complete and all tests pass, but background removal is not yet effective in practice. Requires algorithm optimization. Not recommended for production use.
+
+#### New Classes
+- **CellCleanupProcessor** (`lib/ruby_spriter/cell_cleanup_processor.rb`)
+  - Orchestrates cell-by-cell analysis and cleanup
+  - Methods: `cleanup_cells`, `extract_cell`, `analyze_cell_colors`, `remove_dominant_colors`, `reassemble_spritesheet`
+  - Integrates with GimpProcessor for color selection
+  - Returns statistics: `{ processed: N, cleaned: N, skipped: N, colors_removed: N }`
+
+- **CellCleanupConfig** (`lib/ruby_spriter/cell_cleanup_config.rb`)
+  - Configuration validation for cleanup parameters
+  - Validates threshold range (1.0-50.0)
+
+- **CellCleanupGimpScript** (`lib/ruby_spriter/cell_cleanup_gimp_script.rb`)
+  - Generates GIMP 3.x Python-fu scripts for cell cleanup
+  - Handles path normalization for Windows
+  - Uses exact color matching with Gegl.Color API
+  - Proper garbage collection to prevent memory leaks
+
+#### Integration
+- **Processor**: Updated `apply_cell_cleanup` method with proper parameter passing
+- **VideoProcessor**: Added cell cleanup step after standard background removal in pipeline
+- **BatchProcessor**: Cell cleanup automatically applies to all videos when flag set
+- **Execution Order**: Standard BG removal → Cell-based cleanup → Scaling/Sharpening/Compression
+
+#### Test Coverage
+- **21 New Tests Added**: CellCleanupProcessor (13), CellCleanupConfig (4), CellCleanupGimpScript (4)
+- **CLI Validation**: 6 tests for flag combination validation
+- **Integration Tests**: 2 VideoProcessor integration tests
+- **Total**: 512 examples, 0 failures
+- **Code Coverage**: 72.58% (1844 / 2544 lines)
+
+#### Technical Details
+- Uses ImageMagick `histogram:info` for dominant color detection
+- Skips transparent pixels in histogram analysis
+- Uses GIMP `gimp-image-select-color` with REPLACE (first color) and ADD (subsequent colors) operations
+- Clears selection with `gimp-drawable-edit-clear` to make colors transparent
+- Reassembles cells using ImageMagick `montage` with no gaps/borders
+
+#### Known Issues (Deferred to v0.7.0.2)
+1. **Ineffective Background Removal** (AC-35, AC-48)
+   - Feature executes without errors but doesn't effectively remove backgrounds
+   - GIMP color selection may need explicit threshold parameter
+   - Requires algorithm investigation and refinement
+
+2. **Performance Exceeds Target** (AC-41)
+   - Adds more than 30% overhead to total processing time
+   - Each cell invokes separate GIMP process (16 invocations for 16-cell spritesheet)
+   - Requires parallel processing optimization
+
+3. **Missing PNG Metadata** (AC-39)
+   - Cell cleanup statistics not embedded in PNG metadata
+   - Low priority - informational only
+
+#### Fixes
+- **Division by Zero in Cell Cleanup**: Fixed parameter passing through pipeline (frames/columns not passed to cleanup_cells)
+- **GIMP Script Generation**: Corrected path normalization, Gegl.Color API, removed non-existent threshold property
+- **Module Loading**: Added missing require for CellCleanupGimpScript in CellCleanupProcessor
+
+#### Documentation
+- Updated requirements document (Revision #11)
+- Added 49 acceptance criteria tracking table
+- Marked feature as "Implemented but requires optimization"
+- Added comprehensive known issues section with root cause analysis
+
+---
+
+### 🐛 Bug Fixes (Nov 8, 2025)
+
+#### Fixed
+- **Missing `--by-frame` Flag in Help Text**: Added `--by-frame` to context-sensitive help
+  - Now appears in `--video --help` output under "Background Removal Options"
+  - Now appears in `--batch --help` output under "Background Removal Options"
+  - Now appears in `--image --help` output under "Background Removal Options"
+  - Description: "Remove background from each frame individually (slower, better quality)"
+  - Proper indentation with tree character (└─) showing hierarchy under `--remove-bg`
+
+- **Runtime Error with `--by-frame` Flag**: Fixed `NoMethodError: undefined method 'extract_frames'`
+  - **Root Causes Identified**:
+    1. `extract_frames` method didn't exist in VideoProcessor
+    2. `assemble_spritesheet_from_frames` method didn't exist in VideoProcessor
+    3. `temp_dir` not passed in options hash to assembly method
+    4. Pattern detection missing for `_nobg` suffix in frame filenames
+    5. Metadata embedding using incorrect API (single argument instead of two)
+
+  - **Fixes Implemented**:
+    1. ✅ Implemented `VideoProcessor#extract_frames(video_path, temp_dir, options)`
+       - Extracts individual frames from video using FFmpeg
+       - Calculates FPS based on video duration and frame count
+       - Returns array of frame filenames (basenames only)
+       - Proper error handling with ProcessingError
+
+    2. ✅ Implemented `VideoProcessor#assemble_spritesheet_from_frames(frame_files, output_path, options)`
+       - Assembles frames into spritesheet using FFmpeg tile filter
+       - Automatic row calculation with ceiling division
+       - Pattern detection for `_nobg` suffix (handles both regular and processed frames)
+       - Validates output file exists after assembly
+
+    3. ✅ Fixed `temp_dir` passing in options
+       - `process_with_background_removal` now merges `temp_dir` into options
+       - Both by-frame and standard paths correctly pass temp directory
+
+    4. ✅ Added pattern detection for `_nobg` suffix
+       - Detects suffix from first filename in array
+       - Constructs correct FFmpeg input pattern: `frame_%03d.png` or `frame_%03d_nobg.png`
+       - Handles frame-by-frame processed files correctly
+
+    5. ✅ Fixed metadata embedding API
+       - Changed from single-argument hash to two-argument form with keywords
+       - Uses temp file pattern: create temp → embed metadata → cleanup
+       - Matches `create_spritesheet` implementation pattern
+       - Properly calculates rows for metadata
+
+#### Test Coverage
+- **11 New Tests Added** (470 → 481 examples, all passing)
+  - CLI help text: 2 tests (video mode, batch mode)
+  - `extract_frames`: 3 tests (FFmpeg command, return value, error handling)
+  - `assemble_spritesheet_from_frames`: 6 tests (assembly, row calculation, ceiling division, _nobg suffix, error handling, file validation)
+- **Code Coverage**: Increased to 19.23% (457 / 2377 lines)
+- **No Regressions**: All existing tests continue to pass
+
+#### Real-World Testing
+- ✅ Tested with actual video file processing
+- ✅ Frame-by-frame processing completes successfully
+- ✅ All frames extracted and processed individually
+- ✅ Spritesheet assembled correctly from processed frames
+- ✅ Metadata embedded properly
+- ✅ Output file created successfully
+
+#### Files Modified
+- `lib/ruby_spriter/cli.rb` - Added `--by-frame` to help text (3 locations)
+- `lib/ruby_spriter/video_processor.rb` - Implemented missing methods, fixed bugs
+- `spec/ruby_spriter/cli_spec.rb` - Added 2 help text tests
+- `spec/ruby_spriter/video_processor_spec.rb` - Added 9 method tests
+- `requirements/Ruby Spriter v0.7.0.1 Bug Fixes.md` - Updated to Revision 2
+
+
+
+#### Refactored
+- **BatchProcessor Architecture**: Eliminated code duplication and improved performance
+  - **Eager Dependency Checking**: Dependencies now checked once during initialization (not per video)
+  - **Cached Instance Variables**: `@gimp_path` and `@gimp_version` stored and reused
+  - **Helper Methods Extracted**:
+    - `using_frame_by_frame_background_removal?` - Checks both `--by-frame` and `--remove-bg` flags
+    - `normalize_video_result_format` - Standardizes result hash format
+    - `needs_dependency_setup?` - Determines if GIMP operations required
+    - `setup_dependencies` - Caches dependency check results
+  - **Refactored Methods**:
+    - `process_video` - Uses cached dependencies, eliminates redundant VideoProcessor instantiation
+    - `process_with_gimp` - Uses cached dependencies directly
+  - **Performance Impact**: 20× reduction in dependency checks (2 per video → 1 total during initialization)
+  - **Architectural Consistency**: BatchProcessor now follows same pattern as Processor class
+  - **Test Coverage**: Added 14 new tests (15 → 29 examples, all passing)
+  - **Code Quality**: Eliminated 5 duplication issues identified in code review
+
+#### Performance
+- **Before**: 2 `DependencyChecker` instantiations per video (shell commands executed repeatedly)
+- **After**: 1 `DependencyChecker` instantiation during initialization (results cached)
+- **Batch Processing**: For 10 videos, reduced from 20 dependency checks to 1 (20× improvement)
+- **Shell Command Reduction**: Eliminated redundant `where gimp`, `gimp --version` calls
+
+#### Technical Details
+- **Files Modified**:
+  - `lib/ruby_spriter/batch_processor.rb` - Refactored implementation (+287 lines net)
+  - `spec/ruby_spriter/batch_processor_spec.rb` - Added comprehensive test coverage
+  - `requirements/Ruby Spriter v0.7.0.1 Requirements.md` - Updated to Revision 10
+- **Test Results**: 474 examples, 0 failures, 0 regressions
+- **Commit**: 1a0f5f3
+
+### 🎞️ Frame-by-Frame Background Removal Release
+
+#### Added
+- **Frame-by-Frame Processing** (`--by-frame`): Process each video frame individually before assembling spritesheet
+  - Perfect for videos with varying backgrounds (lighting changes, environment changes, camera movement)
+  - Processes each frame with background removal before assembly
+  - Progress indicator: "Processing frame X/Y..."
+  - Adds `processing_mode: by-frame` to PNG metadata
+  - Works with all background removal modes: `--fuzzy`, `--threshold`, `--threshold-stepping`
+  - Compatible with `--scale`, `--sharpen`, `--max-compress`
+  - Supports both `--video` and `--batch` modes
+- **CLI Validation**: `--by-frame` requires both `--video` or `--batch` AND `--remove-bg`
+- **VideoProcessor Enhancement**: New `process_with_background_removal` method for frame-by-frame workflow
+- **Processor Integration**: Automatic routing to frame-by-frame processing when flag is set
+- **BatchProcessor Integration**: Full support for batch processing with frame-by-frame mode
+
+#### Changed
+- **Processing Workflow**: When `--by-frame` is used, workflow changes from "Extract → Assemble → Remove BG" to "Extract → Remove BG (each) → Assemble"
+- **Performance Trade-off**: Frame-by-frame processing is ~16× slower than standard mode (e.g., 16 frames: ~120s vs ~7.5s) but produces superior results for varying backgrounds
+
+#### Technical Details
+- **New Methods**:
+  - `VideoProcessor#process_with_background_removal(video_path, output_path, options)` - Main frame-by-frame processing
+  - `VideoProcessor#process_frames_individually(frame_files, temp_dir, options)` - Per-frame background removal
+  - `VideoProcessor#process_image_with_gimp(input_path, output_path, options)` - Helper for GIMP processing
+  - `VideoProcessor#no_background_filename(filename)` - Generate _nobg filenames
+  - `Processor#using_frame_by_frame_background_removal?` - Check if frame-by-frame mode active
+  - `Processor#normalize_video_result_format(result)` - Normalize result format
+  - `BatchProcessor#process_video` - Updated to support frame-by-frame mode
+- **Constants**: `VideoProcessor::NO_BACKGROUND_SUFFIX = '_nobg'`
+- **Test Coverage**: 12 new tests (5 CLI validation, 3 VideoProcessor, 2 Processor integration, 2 BatchProcessor)
+- **Total Tests**: 455 examples, 0 failures
+
+#### Examples
+```bash
+# Basic frame-by-frame processing
+ruby_spriter --video input.mp4 --remove-bg --by-frame
+
+# With custom grid and scaling
+ruby_spriter --video input.mp4 --remove-bg --by-frame \
+  --frames 32 --columns 8 \
+  --scale 50 --sharpen
+
+# Batch processing with frame-by-frame
+ruby_spriter --batch --dir "videos/" --remove-bg --by-frame
+
+# Combine with threshold stepping for maximum quality
+ruby_spriter --video explosion.mp4 \
+  --remove-bg --by-frame --threshold-stepping \
+  --frames 32 --columns 8
+```
+
+#### When to Use `--by-frame`
+- ✅ Video has changing backgrounds between frames
+- ✅ Character moves through different environments
+- ✅ Lighting conditions vary throughout video
+- ✅ Camera pans or moves during recording
+- ✅ Quality is more important than processing speed
+
+#### Performance Characteristics
+- **Standard Mode**: ~7.5 seconds for 16 frames (1× background removal)
+- **Frame-by-Frame Mode**: ~120 seconds for 16 frames (16× background removal)
+- **Trade-off**: Significantly longer processing time for superior quality with varying backgrounds
+
+#### Backward Compatibility
+- Fully backward compatible - all existing workflows continue to work unchanged
+- `--by-frame` is opt-in and disabled by default
+- No breaking changes to existing features or APIs
+
+Closes #XX (Frame-by-Frame Background Removal)
+
+---
+
+## [0.7.0.1] - 2025-11-06
+
+### Added
+- BackgroundSampler class for intelligent background color sampling
+- Two-pass background removal: outer (single-point) + inner (sampled colors)
+- CLI options: --bg-sample-offset (default: 5), --bg-sample-count (default: 10)
+- Pixel cache optimization for 65x performance improvement in sampling
+
+### Changed
+- **BREAKING**: --no-fuzzy is now the DEFAULT for --remove-bg
+- --fuzzy flag now required for contiguous-only selection
+- Single-point selection at (5,5) instead of 4-corner selection
+- GIMP threshold behavior now matches GUI (fixed over-removal at high thresholds)
+
+### Removed
+- --try-inner flag (functionality now in --no-fuzzy default)
+- --threshold-stepping flag (superseded by BackgroundSampler)
+- --inner-min-area, --adaptive-min-area, --multi-pass flags
+- --edge-sample-depth, --edge-sample-pattern flags
+- --color-space, --remove-smoke, --bg-fuzz, --ghost-threshold flags
+- EdgeSampler, InnerBackgroundProcessor, InnerBgConfig classes
+
+### Fixed
+- GIMP threshold parameter now works correctly at all values (0-100)
+- Single-point selection eliminates threshold compounding issue
+- Background removal no longer removes more pixels than GIMP GUI
+
 
 All notable changes to Ruby Spriter will be documented in this file.
 
@@ -741,6 +1022,14 @@ Closes #5
 
 ---
 
+[0.7.0.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.7.0...v0.7.0.1
+[0.7.0]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.7.1...v0.7.0
+[0.6.7.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.7...v0.6.7.1
+[0.6.7]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.6...v0.6.7
+[0.6.6]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.5...v0.6.6
+[0.6.5]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.4...v0.6.5
+[0.6.4]: https://github.com/scooter-indie/ruby-spriter/releases/tag/v0.6.4
+[0.6.3]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/scooter-indie/ruby-spriter/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/scooter-indie/ruby-spriter/releases/tag/v0.6.0

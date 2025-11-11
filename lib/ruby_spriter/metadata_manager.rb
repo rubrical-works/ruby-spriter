@@ -6,6 +6,7 @@ module RubySpriter
   # Manages PNG metadata for spritesheets
   class MetadataManager
     METADATA_PREFIX = 'SPRITESHEET'
+    METADATA_VERSION = RubySpriter::VERSION
 
     # Embed metadata into PNG file
     # @param input_file [String] Source PNG file

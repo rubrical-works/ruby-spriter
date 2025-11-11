@@ -47,6 +47,24 @@ module RubySpriter
 
     private
 
+    # Check if using frame-by-frame background removal mode
+    # @return [Boolean] true if both --by-frame and --remove-bg flags are set
+    def using_frame_by_frame_background_removal?
+      options[:by_frame] && options[:remove_bg]
+    end
+
+    # Normalize video processing result to standard format
+    # @param result [Hash] Result from process_with_background_removal
+    # @return [Hash] Normalized result with :output_file, :columns, :rows, :frames
+    def normalize_video_result_format(result)
+      {
+        output_file: result[:output_file],
+        columns: result[:columns],
+        rows: (result[:frames].to_f / result[:columns]).ceil,
+        frames: result[:frames]
+      }
+    end
+
     def default_options
       {
         video: nil,
@@ -66,8 +84,9 @@ module RubySpriter
         sharpen_gain: 0.5,
         sharpen_threshold: 0.03,
         remove_bg: false,
-        bg_threshold: 0.0,
-        grow_selection: 1,
+        bg_threshold: 15.0,
+        feather_radius: 0.0,
+        grow_selection: 0,  # Changed from 1 to 0 - don't grow by default!
         fuzzy_select: true,
         operation_order: :scale_then_remove_bg,
         validate_columns: true,
@@ -394,19 +413,47 @@ module RubySpriter
       final_output = Utils::FileHelper.ensure_unique_output(desired_output, overwrite: options[:overwrite])
 
       # Step 2: Convert video to spritesheet
-      video_processor = VideoProcessor.new(options)
-      result = video_processor.create_spritesheet(
-        options[:video],
-        final_output
-      )
+      # Pass gimp_path through options for background removal
+      video_options = options.merge(gimp_path: @gimp_path)
+      video_processor = VideoProcessor.new(video_options)
+
+      # Check if we need frame-by-frame background removal
+      if using_frame_by_frame_background_removal?
+        # Frame-by-frame processing with background removal
+        result = video_processor.process_with_background_removal(
+          options[:video],
+          final_output,
+          video_options
+        )
+
+        # Convert result to match expected format
+        result = normalize_video_result_format(result)
+      else
+        # Standard video processing
+        result = video_processor.create_spritesheet(
+          options[:video],
+          final_output
+        )
+      end
 
       working_file = result[:output_file]
       intermediate_files = []
 
       # Step 3: Apply GIMP processing if requested
-      if needs_gimp?
+      # Skip GIMP processing if by_frame already handled background removal
+      if needs_gimp? && !using_frame_by_frame_background_removal?
         initial_file = working_file
         working_file = process_with_gimp(working_file)
+
+        # Apply cell cleanup after GIMP background removal
+        if options[:cleanup_cells] && options[:remove_bg]
+          # Pass frame count and columns to cell cleanup
+          cleanup_options = options.merge(
+            frames: result[:frames],
+            columns: result[:columns]
+          )
+          working_file = apply_cell_cleanup(working_file, cleanup_options)
+        end
 
         # Track intermediate files for cleanup (everything except initial and final)
         if working_file != initial_file
@@ -444,6 +491,7 @@ module RubySpriter
     def execute_image_workflow
       working_file = options[:image]
       intermediate_files = []
+      @background_palette = nil
 
       # Handle metadata addition workflow first
       if options[:add_meta]
@@ -455,34 +503,49 @@ module RubySpriter
         return execute_extract_workflow
       end
 
-      # STEP 1: Threshold stepping (if enabled) - applied before GIMP
-      if options[:threshold_stepping] && options[:remove_bg]
-        working_file = process_threshold_stepping(working_file, intermediate_files)
+      # STEP 1: Sample edges ONCE if needed for background removal operations
+      if options[:remove_bg] && (options[:threshold_stepping] || options[:try_inner])
+        @background_palette = sample_edge_colors(working_file)
       end
 
-      # STEP 2: Apply GIMP processing if requested (edge-based background removal)
-      if needs_gimp?
+      # STEP 2: Apply operations in correct order based on flags
+      if options[:threshold_stepping] && options[:remove_bg]
+        # Threshold stepping (uses background_palette, skips GIMP fuzzy select)
+        working_file = process_threshold_stepping(working_file, intermediate_files, @background_palette)
+
+        # Inner removal after threshold stepping (if requested)
+        if options[:try_inner]
+          working_file = process_inner_background_removal(working_file, intermediate_files, @background_palette)
+        end
+
+      elsif options[:try_inner] && options[:remove_bg]
+        # CORRECT ORDER: GIMP fuzzy select FIRST, then inner removal
+        # GIMP removes outer background quickly, leaving less work for inner removal
         initial_file = working_file
         working_file = process_with_gimp(working_file)
+        if working_file != initial_file
+          intermediate_files = collect_intermediate_files(initial_file, working_file)
+        end
 
-        # Track intermediate files for cleanup (everything except initial and final)
+        # Inner removal processes interior using pre-sampled background_palette
+        working_file = process_inner_background_removal(working_file, intermediate_files, @background_palette)
+
+      elsif needs_gimp?
+        # Traditional GIMP processing only (no threshold stepping, no inner removal)
+        initial_file = working_file
+        working_file = process_with_gimp(working_file)
         if working_file != initial_file
           intermediate_files = collect_intermediate_files(initial_file, working_file)
         end
       end
 
-      # STEP 3: Apply inner background removal if requested (after GIMP)
-      if options[:try_inner] && options[:remove_bg]
-        working_file = process_inner_background_removal(working_file, intermediate_files)
-      end
-
-      # STEP 4: Ghost edge cleaning (if multi-pass enabled)
+      # STEP 3: Ghost edge cleaning (if multi-pass enabled)
       if options[:multi_pass] && options[:remove_bg]
         working_file = process_ghost_edge_cleaning(working_file, intermediate_files)
       end
 
-      # STEP 5: Smoke detection and removal (detection always active when removing bg)
-      if options[:remove_bg]
+      # STEP 4: Smoke detection and removal (only if explicitly enabled)
+      if options[:remove_smoke] == true
         working_file = process_smoke_detection(working_file, intermediate_files)
       end
 
@@ -732,7 +795,58 @@ module RubySpriter
       gimp_processor.process(input_file)
     end
 
-    def process_inner_background_removal(input_file, intermediate_files)
+    def apply_cell_cleanup(working_file, cleanup_options = {})
+      Utils::OutputFormatter.header("CELL CLEANUP")
+      Utils::OutputFormatter.indent("Analyzing and removing residual background colors from spritesheet cells...")
+
+      require_relative 'cell_cleanup_processor'
+      cell_processor = CellCleanupProcessor.new(cleanup_options.merge(gimp_path: @gimp_path))
+
+      # Process the spritesheet
+      stats = cell_processor.cleanup_cells(working_file, cleanup_options)
+
+      Utils::OutputFormatter.success("Cell cleanup complete")
+      if stats
+        Utils::OutputFormatter.indent("Processed: #{stats[:processed]} cells")
+        Utils::OutputFormatter.indent("Cleaned: #{stats[:cleaned]} cells")
+        Utils::OutputFormatter.indent("Skipped: #{stats[:skipped]} cells")
+        Utils::OutputFormatter.indent("Colors removed: #{stats[:colors_removed]}")
+      end
+
+      # Cell cleanup modifies the file in-place, so return the same path
+      working_file
+    end
+
+    def sample_edge_colors(input_file)
+      Utils::OutputFormatter.header("EDGE SAMPLING")
+      Utils::OutputFormatter.indent("Sampling image edges for background colors...")
+
+      # Create configuration from options
+      config = InnerBgConfig.new(
+        edge_sample_interval: options[:edge_sample_interval] || 5,
+        edge_sample_depth: options[:edge_sample_depth] || 2
+      )
+
+      # Sample edges and build color palette
+      sampler = EdgeSampler.new(input_file, config)
+      samples = sampler.sample_edges
+      background_palette = sampler.build_color_palette(samples)
+
+      # Report sampling results
+      edge_report = sampler.report
+      Utils::OutputFormatter.indent("Samples collected: #{edge_report[:samples_collected]}")
+      Utils::OutputFormatter.indent("Unique colors: #{edge_report[:unique_colors]}")
+
+      if background_palette.empty?
+        Utils::OutputFormatter.indent("⚠️  No background colors detected, using fallback")
+        background_palette = [{ r: 255, g: 255, b: 255 }]
+      end
+
+      Utils::OutputFormatter.success("Edge sampling complete (#{background_palette.length} color(s))")
+      background_palette
+    end
+
+    def process_inner_background_removal(input_file, intermediate_files, background_palette = nil)
       Utils::OutputFormatter.header("INNER BACKGROUND REMOVAL")
       Utils::OutputFormatter.indent("Detecting and removing interior background regions...")
 
@@ -745,17 +859,19 @@ module RubySpriter
         return input_file
       end
 
-      # Sample edge colors to build background palette
-      Utils::OutputFormatter.indent("Sampling edge colors...")
-      sampler = EdgeSampler.new(input_file, config)
-      background_palette = sampler.sample_edges.then { |samples| sampler.build_color_palette(samples) }
+      # Use provided palette or sample edges (backward compatibility)
+      if background_palette.nil?
+        Utils::OutputFormatter.indent("Sampling edge colors...")
+        sampler = EdgeSampler.new(input_file, config)
+        background_palette = sampler.sample_edges.then { |samples| sampler.build_color_palette(samples) }
 
-      if background_palette.empty?
-        Utils::OutputFormatter.indent("⚠️  No background colors detected. Skipping inner removal.")
-        return input_file
+        if background_palette.empty?
+          Utils::OutputFormatter.indent("⚠️  No background colors detected. Skipping inner removal.")
+          return input_file
+        end
       end
 
-      Utils::OutputFormatter.indent("Found #{background_palette.length} background color(s)")
+      Utils::OutputFormatter.indent("Using #{background_palette.length} background color(s)")
 
       # Create output file path (unique to avoid conflicts)
       dir = File.dirname(input_file)
@@ -782,34 +898,76 @@ module RubySpriter
       output_file
     end
 
-    def process_threshold_stepping(input_file, intermediate_files)
-      Utils::OutputFormatter.header("THRESHOLD STEPPING")
-      Utils::OutputFormatter.indent("Processing with multiple fuzzy select thresholds...")
+    def process_threshold_stepping(input_file, intermediate_files, background_palette = nil)
+      Utils::OutputFormatter.header('Threshold Stepping Background Removal')
 
-      # Create configuration from options
-      config = InnerBgConfig.new(options)
+      # Use provided palette or sample edges (backward compatibility)
+      if background_palette.nil?
+        Utils::OutputFormatter.indent('Sampling image edges for background colors...')
+        config = InnerBgConfig.new(
+          edge_sample_interval: options[:edge_sample_interval] || 5,
+          edge_sample_depth: options[:edge_sample_depth] || 2,
+          threshold_stepping: true
+        )
 
-      # Create output file path
+        edge_sampler = EdgeSampler.new(input_file, config)
+        samples = edge_sampler.sample_edges
+        background_palette = edge_sampler.build_color_palette(samples)
+
+        # Report edge sampling results
+        edge_report = edge_sampler.report
+        Utils::OutputFormatter.indent("  Samples collected: #{edge_report[:samples_collected]}")
+        Utils::OutputFormatter.indent("  Unique colors: #{edge_report[:unique_colors]}")
+
+        if background_palette.empty?
+          Utils::OutputFormatter.indent('WARNING: No background colors detected, using fallback')
+          background_palette = [{ r: 255, g: 255, b: 255 }]
+        end
+      else
+        Utils::OutputFormatter.indent("Using #{background_palette.length} background color(s) from edge sampling")
+      end
+
+      # Create GimpProcessor instance
+      gimp_path = Platform.find_gimp
+      gimp_version = Platform.get_gimp_version(gimp_path)
+      gimp_processor = GimpProcessor.new(gimp_path, options.merge(gimp_version: gimp_version))
+
+      # Step 3: Create output file path
       dir = File.dirname(input_file)
       basename = File.basename(input_file, '.*')
       ext = File.extname(input_file)
       output_file = File.join(dir, "#{basename}_threshold_stepped#{ext}")
 
-      # Process threshold stepping
-      stepper = ThresholdStepper.new(input_file, output_file, config)
+      # Step 4: Apply threshold stepping with GIMP
+      Utils::OutputFormatter.indent('Applying threshold-based removal with GIMP...')
+      threshold_options = options.merge(
+        threshold_values: options[:threshold_values],
+        threshold_timeout: options[:threshold_timeout] || 60,
+        total_threshold_timeout: options[:total_threshold_timeout] || 300
+      )
+
+      stepper = ThresholdStepper.new(
+        input_file,
+        output_file,
+        background_palette,
+        gimp_processor,
+        threshold_options
+      )
+
       stepper.process
 
-      # Display processing report
+      # Report results
       report = stepper.report
-      Utils::OutputFormatter.indent("Thresholds processed: #{report[:thresholds_processed].join(', ')}")
-      Utils::OutputFormatter.indent("Processing time: #{report[:processing_time]}s")
+      Utils::OutputFormatter.indent("  Thresholds processed: #{report[:thresholds_processed]}")
+      Utils::OutputFormatter.indent("  Skipped thresholds: #{report[:skipped_thresholds]}") if report[:skipped_thresholds] > 0
+      Utils::OutputFormatter.indent("  Processing time: #{report[:total_time]}s")
 
       # Track input file for cleanup if it's an intermediate file
       if input_file != options[:image]
         intermediate_files << input_file unless intermediate_files.include?(input_file)
       end
 
-      Utils::OutputFormatter.success("Threshold stepping complete")
+      Utils::OutputFormatter.success('Threshold stepping complete')
       output_file
     end
 
