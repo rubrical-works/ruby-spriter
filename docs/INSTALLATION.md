@@ -126,10 +126,11 @@ sudo apt install xvfb -y
 ```
 
 **Note for Linux Users**:
+- **Xvfb is REQUIRED**: Ruby Spriter uses `xvfb-run` to wrap all GIMP commands, providing a virtual display that prevents GUI windows from appearing
 - **Ubuntu 25.04+**: GIMP 3.x is available in the native package repository
-- **Older distributions**: Use Flatpak to install GIMP 3.x. Ruby Spriter automatically uses Xvfb (X Virtual Framebuffer) with Flatpak socket isolation for headless operation
+- **Older distributions**: Use Flatpak to install GIMP 3.x
 - **GIMP 2.x is NOT supported** - ensure you have GIMP 3.x installed
-- No GIMP GUI windows will appear during processing - perfect for both desktop use (no distractions) and server environments (CI/CD, Docker, SSH sessions)
+- **Headless operation**: No GIMP GUI windows will appear during processing - perfect for both desktop use (no distractions) and server environments (CI/CD, Docker, SSH sessions)
 
 #### Linux (Fedora/RHEL)
 
