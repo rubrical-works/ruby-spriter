@@ -99,7 +99,8 @@ RSpec.describe RubySpriter::BackgroundSampler do
 
   describe '#sample_pixel' do
     it 'uses ImageMagick to get pixel color at specific coordinates' do
-      expect(Open3).to receive(:capture3).with(/magick.*pixel:p\{10,10\}/).and_return(
+      # Matches both 'magick' (Windows) and 'convert' (Unix)
+      expect(Open3).to receive(:capture3).with(/(magick|convert).*pixel:p\{10,10\}/).and_return(
         ["srgb(128,64,32)", "", double(success?: true)]
       )
 

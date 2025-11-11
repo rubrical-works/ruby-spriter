@@ -12,8 +12,9 @@ RSpec.describe RubySpriter::CellCleanupGimpScript do
 
       expect(script).to include("from gi.repository import Gimp, Gio, Gegl")
       expect(script).to include('gimp-image-select-color')
-      expect(script).to include('E:/input.png')
-      expect(script).to include('E:/output.png')
+      # Paths are converted to forward slashes for GIMP Python compatibility
+      expect(script).to include('/input.png')
+      expect(script).to include('/output.png')
     end
 
     it 'stores RGB colors as integers for later normalization' do

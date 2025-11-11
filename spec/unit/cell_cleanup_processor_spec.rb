@@ -111,7 +111,8 @@ RSpec.describe RubySpriter::CellCleanupProcessor do
     it 'extracts cell using ImageMagick crop' do
       # Mock Open3.capture3 to simulate ImageMagick execution
       expect(Open3).to receive(:capture3) do |cmd|
-        expect(cmd).to include('magick')
+        # Matches 'magick' (Windows) or 'convert' (Unix)
+        expect(cmd).to match(/(magick|convert)/)
         expect(cmd).to include('-crop')
         expect(cmd).to include('160x240+320+240')  # Width x Height + X + Y
         expect(cmd).to include('+repage')
@@ -193,8 +194,8 @@ RSpec.describe RubySpriter::CellCleanupProcessor do
 
       # Expect ImageMagick montage command
       expect(Open3).to receive(:capture3) do |cmd|
-        expect(cmd).to include('magick')
-        expect(cmd).to include('montage')
+        # On Windows: 'magick montage', on Unix: just 'montage'
+        expect(cmd).to match(/(magick\s+montage|montage)/)
         expect(cmd).to include('-tile')
         expect(cmd).to include('2x2')  # 2 columns × 2 rows
         expect(cmd).to include('-geometry')
