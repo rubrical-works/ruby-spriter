@@ -18,5 +18,10 @@
   "frameworkVersion": "0.90.0",
   "installedDate": "2026-05-06",
   "frameworkPath": "C:/ProgramData/praxis-hub/framework_root_0.90.0",
-  "platform": "win32"
+  "platform": "win32",
+  "activeDomains": [
+    "qa",
+    "performance",
+    "security"
+  ]
 }

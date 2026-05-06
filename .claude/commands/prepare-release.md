@@ -125,6 +125,21 @@ node .claude/scripts/shared/recommend-version.js
 ## Phase 2: Validation
 
 <!-- USER-EXTENSION-START: pre-validation -->
+### Run Tests
+
+```bash
+bundle exec rspec
+```
+
+**If tests fail, STOP and fix before continuing.**
+
+### Dependency Audit
+
+```bash
+bundle exec bundler-audit check --update
+```
+
+**If high/critical vulnerabilities found, STOP and report.**
 <!-- USER-EXTENSION-END: pre-validation -->
 
 <!-- USER-EXTENSION-START: post-validation -->
