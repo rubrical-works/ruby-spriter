@@ -1,0 +1,27 @@
+{
+  "processFramework": "IDPF-Agile",
+  "domainSpecialist": "Game-Developer",
+  "reviewMode": "solo",
+  "projectSkills": [
+    "anti-pattern-analysis",
+    "codebase-analysis",
+    "command-spec-audit",
+    "error-handling-patterns",
+    "tdd-failure-recovery",
+    "tdd-green-phase",
+    "tdd-process",
+    "tdd-red-phase",
+    "tdd-refactor-coverage-audit",
+    "tdd-refactor-phase",
+    "test-writing-patterns"
+  ],
+  "frameworkVersion": "0.90.0",
+  "installedDate": "2026-05-06",
+  "frameworkPath": "C:/ProgramData/praxis-hub/framework_root_0.90.0",
+  "platform": "win32",
+  "activeDomains": [
+    "qa",
+    "performance",
+    "security"
+  ]
+}

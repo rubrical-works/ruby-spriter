@@ -24,6 +24,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
+          bundler: '2'
           bundler-cache: true
 
       - name: Install ImageMagick (Linux)
