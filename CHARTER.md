@@ -46,7 +46,7 @@ Stabilization on the v0.7.0.x line: GIMP 3.x enforcement, headless Linux (Xvfb) 
 |--------|-------|----------|
 | Library classes | 24 | `lib/ruby_spriter/` |
 | RSpec test files | 24 | `spec/` |
-| Processing modes | 7 | `lib/ruby_spriter/processor.rb` |
+| Processing modes | 5 | `lib/ruby_spriter/processor.rb` |
 | External tool integrations | 4 | FFmpeg, ImageMagick, GIMP, Xvfb |
 
 ## Goals

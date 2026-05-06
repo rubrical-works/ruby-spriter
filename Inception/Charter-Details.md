@@ -30,4 +30,3 @@ Game developers — particularly those working with Godot — frequently need to
 ## Stakeholders
 
 - **Maintainer:** scooter-indie
-- **Domain expert (this session):** Game-Developer

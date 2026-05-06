@@ -7,7 +7,7 @@ Ruby Spriter is a CLI tool — there is no service to operate. This runbook cove
 ## Service Overview
 
 - Distribution: RubyGems (`ruby_spriter`)
-- Source: https://github.com/scooter-indie/ruby-spriter
+- Source: https://github.com/rubrical-works/ruby-spriter
 - Issue tracker: GitHub Issues on the same repo
 
 ## Health Checks
